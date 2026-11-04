@@ -1,0 +1,16 @@
+{
+  "name": "Sketch VR",
+  "short_name": "Sketch VR",
+  "description": "Overlay a sketch on your camera view and place it in headset AR.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101311",
+  "theme_color": "#101311",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
