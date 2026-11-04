@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#101311">
+    <meta name="theme-color" content="#f5f4ef">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <link rel="manifest" href="manifest.webmanifest">
@@ -12,47 +12,112 @@
     <title>Sketch VR</title>
     <style>
       :root {
-        color-scheme: dark;
-        --ink: #101311;
-        --paper: #eef1e9;
-        --muted: #929991;
-        --line: rgba(238, 241, 233, .18);
-        --acid: #d4f36a;
-        --mono: "DM Mono", "Courier New", monospace;
-        --display: "Space Grotesk", "Trebuchet MS", sans-serif;
+        --bg: #f5f4ef;
+        --surface: #ffffff;
+        --ink: #161614;
+        --ink-2: #4b4b46;
+        --muted: #8b8a82;
+        --line: rgba(22, 22, 20, .1);
+        --danger: #b42318;
+        --radius: 12px;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 10px 30px rgba(0, 0, 0, .07);
+        --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+        --mono: ui-monospace, "SF Mono", Menlo, monospace;
       }
 
-      * { box-sizing: border-box; }
+      *, *::before, *::after { box-sizing: border-box; }
+      [hidden] { display: none !important; }
 
       html, body {
         width: 100%;
         height: 100%;
         margin: 0;
         overflow: hidden;
-        background: var(--ink);
-        color: var(--paper);
+        background: var(--bg);
+        color: var(--ink);
       }
 
       body {
-        font-family: var(--display);
+        display: flex;
+        flex-direction: column;
+        font: 14px/1.4 var(--font);
         -webkit-font-smoothing: antialiased;
       }
 
-      button { font: inherit; }
+      button, input, label { font: inherit; }
+      button:focus-visible, label:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+      .app-bar {
+        z-index: 5;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        min-height: 60px;
+        padding: 12px 20px;
+        border-bottom: 1px solid var(--line);
+        background: var(--bg);
+      }
+
+      .app-title {
+        margin: 0 auto 0 0;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: -.01em;
+      }
+
+      .image-upload-input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
+
+      .toolbar-button, .upload-button {
+        display: inline-flex;
+        min-height: 34px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface);
+        color: var(--ink);
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: border-color .15s ease, background .15s ease;
+      }
+
+      .toolbar-button:hover, .upload-button:hover { border-color: var(--ink-2); }
+      .toolbar-button:disabled { opacity: .5; cursor: default; }
+
+      .toolbar-button.is-primary {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #fff;
+      }
+
+      .toolbar-button.is-primary:hover:not(:disabled) { background: var(--ink-2); border-color: var(--ink-2); }
+
+      .app-status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px 12px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .app-status #statusText { color: var(--ink); font-weight: 500; }
 
       .stage {
         position: relative;
-        width: 100%;
-        height: 100%;
-        min-height: 420px;
-        isolation: isolate;
+        flex: 1;
+        min-height: 0;
         overflow: hidden;
-        background-color: var(--ink);
-        background-image:
-          linear-gradient(rgba(238, 241, 233, .025) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(238, 241, 233, .025) 1px, transparent 1px),
-          radial-gradient(ellipse at 50% 45%, #242a24 0%, #171b18 44%, #101311 78%);
-        background-size: 48px 48px, 48px 48px, auto;
+        isolation: isolate;
+        background: #e8e7e1;
       }
 
       .camera-feed {
@@ -63,8 +128,8 @@
         height: 100%;
         object-fit: cover;
         opacity: 0;
-        transition: opacity .35s ease;
-        background: #090b09;
+        background: #000;
+        transition: opacity .3s ease;
       }
 
       .stage.is-live .camera-feed { opacity: 1; }
@@ -83,21 +148,44 @@
         transform: translate(-50%, -50%) scale(var(--sketch-scale, 1));
       }
 
+      .sketch-overlay:not([src]) { display: none; }
       .sketch-overlay.is-dragging { cursor: grabbing; }
+
+      .empty-state {
+        position: absolute;
+        inset: 0;
+        display: none;
+        place-items: center;
+        padding: 24px;
+        text-align: center;
+        pointer-events: none;
+      }
+
+      .empty-state strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 18px;
+        font-weight: 600;
+      }
+
+      .empty-state p { margin: 0; color: var(--ink-2); }
+
+      .stage:not(.is-live):not(:has(.sketch-overlay[src])) .empty-state { display: grid; }
 
       .sketch-controls {
         position: absolute;
         z-index: 3;
-        right: clamp(22px, 4.2vw, 64px);
-        bottom: 105px;
+        top: 16px;
+        right: 16px;
         display: none;
-        width: min(280px, calc(100vw - 44px));
-        gap: 10px;
-        padding: 12px 14px;
+        width: 240px;
+        gap: 12px;
+        padding: 14px;
         border: 1px solid var(--line);
-        background: rgba(16, 19, 17, .88);
-        backdrop-filter: blur(12px);
-        pointer-events: auto;
+        border-radius: var(--radius);
+        background: rgba(255, 255, 255, .92);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
       }
 
       .stage.is-live .sketch-controls { display: grid; }
@@ -105,66 +193,55 @@
 
       .sketch-control {
         display: grid;
-        grid-template-columns: 58px minmax(0, 1fr) 38px;
+        grid-template-columns: 56px minmax(0, 1fr) 44px;
         align-items: center;
-        gap: 9px;
-        color: var(--paper);
-        font: 10px var(--mono);
-        text-transform: uppercase;
+        gap: 8px;
+        color: var(--ink-2);
+        font-size: 12px;
       }
 
       .sketch-control input {
         width: 100%;
         min-width: 0;
-        height: 28px;
-        margin: 0;
-        padding: 2px 4px;
+        height: 30px;
+        padding: 0 8px;
         border: 1px solid var(--line);
-        background: rgba(16, 19, 17, .7);
-        color: var(--paper);
-        font: 10px var(--mono);
-        cursor: pointer;
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
+        font-size: 12px;
       }
 
       .sketch-control output {
-        color: var(--acid);
+        color: var(--ink);
         text-align: right;
+        font-variant-numeric: tabular-nums;
       }
 
       .fix-sketch-button {
         min-height: 34px;
-        border: 1px solid var(--acid);
-        background: transparent;
-        color: var(--acid);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--ink);
         cursor: pointer;
-        font: 10px var(--mono);
-        text-transform: uppercase;
+        font-size: 12px;
+        font-weight: 500;
       }
 
       .fix-sketch-button[aria-pressed="true"] {
-        background: var(--acid);
-        color: var(--ink);
+        border-color: var(--ink);
+        background: var(--ink);
+        color: #fff;
       }
 
       body.xr-active .fix-sketch-button { display: none; }
-
-      .wash {
-        position: absolute;
-        z-index: 0;
-        inset: 0;
-        pointer-events: none;
-        background: linear-gradient(180deg, rgba(8, 10, 8, .52), transparent 25%, transparent 67%, rgba(8, 10, 8, .66));
-        opacity: 0;
-        transition: opacity .35s ease;
-      }
-
-      .stage.is-live .wash { opacity: 1; }
 
       body.xr-active .stage { pointer-events: none; }
 
       .xr-renderer {
         position: fixed;
-        z-index: 10;                                    
+        z-index: 10;
         inset: 0;
         display: none;
         width: 100%;
@@ -184,443 +261,36 @@
 
       body.xr-active .xr-hud { display: block; }
 
+      .xr-hud .sketch-controls {
+        top: max(20px, env(safe-area-inset-top));
+        right: 16px;
+        bottom: auto;
+      }
+
       .xr-placement-controls {
         position: absolute;
         bottom: max(30px, env(safe-area-inset-bottom));
         left: 50%;
-        display: grid;
-        justify-items: center;
-        gap: 10px;
         transform: translateX(-50%);
       }
 
       .xr-placement-hint {
         margin: 0;
-        padding: 8px 12px;
-        background: rgba(16, 19, 17, .78);
-        color: var(--paper);
-        font: 11px var(--mono);
+        padding: 9px 16px;
+        border-radius: 999px;
+        background: rgba(22, 22, 20, .86);
+        color: #fff;
+        font-size: 13px;
         white-space: nowrap;
       }
 
-      .topbar, .bottombar {
-        position: absolute;
-        z-index: 2;
-        right: 0;
-        left: 0;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-
-      .topbar {
-        top: 0;
-        min-height: 76px;
-        padding: max(22px, env(safe-area-inset-top)) clamp(22px, 4.2vw, 64px) 14px;
-      }
-
-      .wordmark {
-        display: flex;
-        align-items: center;
-        gap: 13px;
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: .12em;
-        text-transform: uppercase;
-      }
-
-      .wordmark-mark {
-        display: grid;
-        width: 27px;
-        aspect-ratio: 1;
-        place-items: center;
-        border: 1px solid var(--acid);
-        color: var(--acid);
-        font: 500 12px var(--mono);
-        letter-spacing: 0;
-      }
-
-      .status {
-        display: inline-flex;
-        align-items: center;
-        gap: 9px;
-        color: var(--paper);
-        font: 11px var(--mono);
-        letter-spacing: .08em;
-        text-transform: uppercase;
-      }
-
-      .status-dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 50%;
-        background: #737b72;
-      }
-
-      .is-live .status-dot {
-        background: var(--acid);
-        box-shadow: 0 0 12px rgba(212, 243, 106, .65);
-      }
-
-      .viewfinder {
-        position: absolute;
-        inset: clamp(80px, 12vh, 120px) clamp(18px, 6vw, 92px) clamp(112px, 17vh, 164px);
-        pointer-events: none;
-        transition: opacity .35s ease;
-      }
-
-      .viewfinder::before, .viewfinder::after {
-        position: absolute;
-        width: 26px;
-        height: 26px;
-        content: "";
-        opacity: .65;
-      }
-
-      .viewfinder::before {
-        top: 0;
-        left: 0;
-        border-top: 1px solid var(--acid);
-        border-left: 1px solid var(--acid);
-      }
-
-      .viewfinder::after {
-        right: 0;
-        bottom: 0;
-        border-right: 1px solid var(--acid);
-        border-bottom: 1px solid var(--acid);
-      }
-
-      .finder-corner {
-        position: absolute;
-        width: 26px;
-        height: 26px;
-        opacity: .65;
-      }
-
-      .finder-corner.top-right {
-        top: 0;
-        right: 0;
-        border-top: 1px solid var(--acid);
-        border-right: 1px solid var(--acid);
-      }
-
-      .finder-corner.bottom-left {
-        bottom: 0;
-        left: 0;
-        border-bottom: 1px solid var(--acid);
-        border-left: 1px solid var(--acid);
-      }
-
-      .crosshair {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 18px;
-        height: 18px;
-        transform: translate(-50%, -50%);
-        opacity: .38;
-      }
-
-      .crosshair::before, .crosshair::after {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        content: "";
-        background: var(--paper);
-        transform: translate(-50%, -50%);
-      }
-
-      .crosshair::before { width: 1px; height: 18px; }
-      .crosshair::after { width: 18px; height: 1px; }
-
-      .idle-copy {
-        position: absolute;
-        z-index: 1;
-        top: 50%;
-        left: clamp(30px, 12vw, 180px);
-        width: min(560px, calc(100% - 60px));
-        transform: translateY(-50%);
-        transition: opacity .25s ease, transform .35s ease;
-      }
-
-      .eyebrow {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 0 0 22px;
-        color: var(--acid);
-        font: 11px var(--mono);
-        letter-spacing: .12em;
-        text-transform: uppercase;
-      }
-
-      .eyebrow::before {
-        width: 25px;
-        height: 1px;
-        background: currentColor;
-        content: "";
-      }
-
-      h1 {
-        max-width: 540px;
-        margin: 0;
-        font-size: clamp(54px, 8vw, 108px);
-        font-weight: 500;
-        line-height: .93;
-      }
-
-      h1 span { color: var(--acid); }
-
-      .start-button {
-        display: inline-flex;
-        min-height: 54px;
-        align-items: center;
-        gap: 20px;
-        margin-top: 36px;
-        padding: 0 19px;
-        border: 1px solid var(--acid);
-        background: var(--acid);
-        color: var(--ink);
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 600;
-        transition: background .2s ease, color .2s ease, transform .2s ease;
-      }
-
-      .action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-
-      .xr-start-button {
-        min-height: 54px;
-        padding: 0 18px;
-        border: 1px solid rgba(238, 241, 233, .58);
-        background: rgba(16, 19, 17, .35);
-        color: var(--paper);
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 500;
-        transition: border-color .2s ease, color .2s ease, background .2s ease;
-      }
-
-      .xr-start-button:hover { border-color: var(--acid); color: var(--acid); }
-      .xr-start-button[hidden] { display: none; }
-
-      .start-button:hover { background: transparent; color: var(--acid); }
-      .start-button:active { transform: scale(.98); }
-
-      .button-arrow {
-        display: grid;
-        width: 23px;
-        height: 23px;
-        place-items: center;
-        border: 1px solid currentColor;
-        font: 14px var(--mono);
-      }
-
-      .error-message {
-        max-width: 390px;
-        min-height: 1.4em;
-        margin: 14px 0 0;
-        color: #f2a99b;
-        font: 12px/1.5 var(--mono);
-      }
-
-      .side-readout {
-        position: absolute;
-        z-index: 2;
-        top: 50%;
-        right: clamp(24px, 4.2vw, 64px);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        color: rgba(238, 241, 233, .58);
-        font: 10px var(--mono);
-        letter-spacing: .08em;
-        writing-mode: vertical-rl;
-        text-transform: uppercase;
-        transform: translateY(-50%);
-      }
-
-      .side-readout::before {
-        width: 1px;
-        height: 44px;
-        background: var(--acid);
-        content: "";
-      }
-
-      .bottombar {
-        bottom: 0;
-        min-height: 94px;
-        padding: 15px clamp(22px, 4.2vw, 64px) max(22px, env(safe-area-inset-bottom));
-      }
-
-      .bottom-note {
-        color: rgba(238, 241, 233, .62);
-        font: 10px var(--mono);
-        letter-spacing: .06em;
-        text-transform: uppercase;
-      }
-
-      .controls { display: flex; align-items: center; gap: 10px; }
-
-      .control-button {
-        display: grid;
-        width: 46px;
-        height: 46px;
-        place-items: center;
-        border: 1px solid rgba(238, 241, 233, .45);
-        border-radius: 50%;
-        background: rgba(16, 19, 17, .46);
-        color: var(--paper);
-        cursor: pointer;
-        backdrop-filter: blur(12px);
-        transition: border-color .2s ease, background .2s ease, color .2s ease;
-      }
-
-      .control-button:hover { border-color: var(--acid); color: var(--acid); }
-      .control-button svg { width: 18px; height: 18px; }
-
-      .stage.is-live .idle-copy {
-        opacity: 0;
-        pointer-events: none;
-        transform: translateY(calc(-50% + 12px));
-      }
-
-      .stage.is-live .viewfinder { opacity: .55; }
-      .stage.is-live .side-readout { color: rgba(238, 241, 233, .82); }
-
-      .xr-hud .sketch-controls {
-        top: max(20px, env(safe-area-inset-top));
-        right: clamp(16px, 4vw, 48px);
-        bottom: auto;
-      }
-
-      button:focus-visible { outline: 2px solid var(--acid); outline-offset: 4px; }
-
-      @media (max-width: 600px) {
-        .topbar { min-height: 66px; padding-right: 22px; padding-left: 22px; }
-        .wordmark { gap: 10px; font-size: 11px; }
-        .status { font-size: 9px; }
-        .idle-copy { left: 28px; width: calc(100% - 56px); }
-        h1 { font-size: clamp(56px, 15vw, 84px); }
-        .eyebrow { margin-bottom: 18px; }
-        .start-button { margin-top: 28px; }
-        .viewfinder { inset: 82px 20px 128px; }
-        .sketch-overlay { width: min(72vw, 360px); max-height: 48vh; }
-        .sketch-controls { right: 12px; bottom: 88px; width: min(280px, calc(100vw - 24px)); }
-        .xr-hud .sketch-controls { top: max(72px, env(safe-area-inset-top)); right: 12px; }
-        .side-readout { right: 23px; font-size: 9px; }
-        .bottombar { min-height: 78px; padding-right: 22px; padding-left: 22px; }
-        .bottom-note { font-size: 9px; }
-        .control-button { width: 42px; height: 42px; }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
-      }
-
-      :root {
-        color-scheme: light;
-      }
-
-      html, body {
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: #fff;
-        color: #111;
-      }
-
-      body {
-        display: flex;
-        flex-direction: column;
-        font-family: sans-serif;
-      }
-
-      .app-bar {
-        z-index: 5;
-        display: flex;
-        min-height: 44px;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 8px;
-      }
-
-      .app-title {
-        margin: 0 8px 0 0;
-        font-size: 16px;
-        font-weight: 600;
-      }
-
-      .image-upload-input {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip-path: inset(50%);
-      }
-
-      .toolbar-button, .upload-button {
-        display: inline-flex;
-        min-height: 32px;
-        align-items: center;
-        justify-content: center;
-        padding: 4px 8px;
-        color: inherit;
-        cursor: pointer;
-        font: inherit;
-      }
-
-      .toolbar-button[hidden] { display: none; }
-
-      .app-status {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 10px;
-        margin-left: auto;
-        color: inherit;
-        font-size: 12px;
-      }
-
-      .stage {
-        flex: 1;
-        width: 100%;
-        min-height: 0;
-        isolation: isolate;
-        background: #eee;
-      }
-
-      .camera-feed { background: #eee; }
-
-      .sketch-controls {
-        top: 12px;
-        right: 12px;
-        bottom: auto;
-        width: min(280px, calc(100vw - 24px));
-        padding: 8px;
-        background: rgba(255, 255, 255, .9);
-      }
-
-      .sketch-control {
-        color: #111;
-        font: 12px sans-serif;
-        text-transform: none;
-      }
-
-      .sketch-control output { color: inherit; }
-
-      .fix-sketch-button {
-        color: inherit;
-        font: 12px sans-serif;
-        text-transform: none;
-      }
-
       .error-message {
         min-height: 0;
         margin: 0;
-        padding: 0 12px;
-        color: #900;
-        font: 13px/1.4 sans-serif;
+        padding: 10px 20px;
+        background: var(--bg);
+        color: var(--danger);
+        font-size: 13px;
       }
 
       .error-message:empty { display: none; }
@@ -628,33 +298,37 @@
       body.xr-active .app-bar { display: none; }
 
       @media (max-width: 600px) {
-        .app-bar { flex-wrap: wrap; }
-        .app-title { margin-right: auto; }
-        .app-status { margin-left: 0; }
-        .stage { min-height: 0; }
+        .app-bar { padding: 12px 14px; }
+        .app-title { width: 100%; }
         .sketch-overlay { width: min(72vw, 360px); max-height: 70vh; }
-        .sketch-controls { right: 8px; width: min(280px, calc(100vw - 16px)); }
+        .sketch-controls { top: auto; right: 12px; bottom: 12px; left: 12px; width: auto; }
       }
     </style>
   </head>
   <body>
     <header class="app-bar">
       <h1 class="app-title">Sketch VR</h1>
-      <input class="image-upload-input" id="imageUpload" type="file" accept="image/*" aria-label="Choose an image">
-      <label class="toolbar-button upload-button" for="imageUpload">Upload image</label>
-      <button class="toolbar-button" id="startButton" type="button"><span>Start camera</span></button>
-      <button class="toolbar-button xr-start-button" id="xrButton" type="button" hidden>Enter headset VR</button>
+      <input class="image-upload-input" id="imageUpload" type="file" accept="image/*" aria-label="Choose a sketch image">
+      <label class="upload-button" for="imageUpload">Upload sketch</label>
+      <button class="toolbar-button is-primary" id="startButton" type="button"><span>Start camera</span></button>
+      <button class="toolbar-button is-primary" id="xrButton" type="button" hidden>Enter headset VR</button>
+      <button class="toolbar-button" id="flipButton" type="button" hidden>Switch camera</button>
+      <button class="toolbar-button" id="stopButton" type="button" hidden>Stop camera</button>
       <div class="app-status">
         <span id="statusText" aria-live="polite">Camera off</span>
         <span id="bottomNote">Waiting for camera</span>
       </div>
-      <button class="toolbar-button" id="flipButton" type="button" hidden>Switch camera</button>
-      <button class="toolbar-button" id="stopButton" type="button" hidden>Stop camera</button>
     </header>
 
     <main class="stage" id="stage">
       <video class="camera-feed" id="cameraFeed" autoplay muted playsinline aria-label="Live camera view"></video>
-      <img class="sketch-overlay" src="sketch-1.jpg" alt="Sketch reference" draggable="false">
+      <img class="sketch-overlay" alt="Sketch reference" draggable="false">
+      <div class="empty-state">
+        <div>
+          <strong>Upload a sketch to begin</strong>
+          <p>Choose an image, then start the camera to trace it.</p>
+        </div>
+      </div>
       <div class="sketch-controls" id="sketchControls" aria-label="Sketch adjustments">
         <label class="sketch-control" for="sketchSize">
           <span>Size</span>
@@ -966,6 +640,11 @@
             scene.add(placement);
 
             const sketch = document.querySelector(".sketch-overlay");
+            if (!sketch.getAttribute("src")) {
+              errorMessage.textContent = "Upload a sketch to enable headset mode.";
+              await new Promise((resolve) => document.addEventListener("sketchimagechange", resolve, { once: true }));
+              errorMessage.textContent = "";
+            }
             await sketch.decode();
             const texture = new THREE.Texture(sketch);
             texture.colorSpace = THREE.SRGBColorSpace;
@@ -985,6 +664,7 @@
             const overlay = new THREE.Mesh(new THREE.PlaneGeometry(width, height), material);
             overlay.position.z = 0.012;
             placement.add(overlay);
+
 
             const xrControlCanvas = document.createElement("canvas");
             xrControlCanvas.width = 420;
