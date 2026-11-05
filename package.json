@@ -1,0 +1,12 @@
+{
+  "name": "sketchvr",
+  "private": true,
+  "description": "Sketch VR: overlay a sketch on the camera view and fix it in headset space.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "iwer": "^2.0.0",
+    "playwright-core": "^1.50.0"
+  }
+}

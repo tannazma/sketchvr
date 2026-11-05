@@ -168,7 +168,22 @@
         font-weight: 600;
       }
 
-      .empty-state p { margin: 0; color: var(--ink-2); }
+      .empty-steps {
+        display: inline-grid;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        color: var(--ink-2);
+        text-align: left;
+        list-style: decimal inside;
+      }
+
+      .panel-help {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
 
       .stage:not(.is-live):not(:has(.sketch-overlay[src])) .empty-state { display: grid; }
 
@@ -309,7 +324,7 @@
     <header class="app-bar">
       <h1 class="app-title">Sketch VR</h1>
       <input class="image-upload-input" id="imageUpload" type="file" accept="image/*" aria-label="Choose a sketch image">
-      <label class="upload-button" for="imageUpload">Upload sketch</label>
+      <label class="upload-button" for="imageUpload">Choose sketch</label>
       <button class="toolbar-button is-primary" id="startButton" type="button"><span>Start camera</span></button>
       <button class="toolbar-button is-primary" id="xrButton" type="button" hidden>Enter headset VR</button>
       <button class="toolbar-button" id="flipButton" type="button" hidden>Switch camera</button>
@@ -325,8 +340,12 @@
       <img class="sketch-overlay" alt="Sketch reference" draggable="false">
       <div class="empty-state">
         <div>
-          <strong>Upload a sketch to begin</strong>
-          <p>Choose an image, then start the camera to trace it.</p>
+          <strong>Trace a sketch on your space</strong>
+          <ol class="empty-steps">
+            <li>Choose a sketch image.</li>
+            <li>Start the camera.</li>
+            <li>Drag it into place and lock it.</li>
+          </ol>
         </div>
       </div>
       <div class="sketch-controls" id="sketchControls" aria-label="Sketch adjustments">
@@ -341,12 +360,13 @@
           <output id="sketchOpacityValue" for="sketchOpacity">50%</output>
         </label>
         <button class="fix-sketch-button" id="fixSketchButton" type="button" aria-pressed="false">Fix in place</button>
+        <p class="panel-help">Drag the sketch or use the arrow keys to move it. Fix it to keep it still.</p>
       </div>
     </main>
     <p class="error-message" id="errorMessage" role="status"></p>
     <div class="xr-hud" id="xrHud">
       <div class="xr-placement-controls">
-        <p class="xr-placement-hint" id="xrPlacementHint">Aim at a surface to position the sketch</p>
+        <p class="xr-placement-hint" id="xrPlacementHint">Aim at a wall and pull the trigger to pin the sketch</p>
       </div>
     </div>
 
@@ -411,7 +431,7 @@
         imageUpload.value = "";
         if (!image) return;
         if (!image.type.startsWith("image/")) {
-          errorMessage.textContent = "Choose an image file.";
+          errorMessage.textContent = "That file isn't an image. Choose a JPG or PNG.";
           return;
         }
 
@@ -513,7 +533,7 @@
       async function startStream() {
         errorMessage.textContent = "";
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          errorMessage.textContent = "Camera access needs trusted HTTPS on a headset. Localhost only works on this device.";
+          errorMessage.textContent = "The camera needs a secure (https) page. Open the Sketch VR link, not a local file.";
           return;
         }
 
@@ -544,11 +564,11 @@
           statusText.textContent = "Camera off";
           bottomNote.textContent = "Waiting for camera";
           const messages = {
-            NotAllowedError: "Camera permission was denied. Allow access in your browser settings and try again.",
+            NotAllowedError: "Camera access is blocked. Allow the camera for this site in your browser settings, then press Start camera again.",
             NotFoundError: "No camera was found on this device.",
-            NotReadableError: "The camera is in use by another app."
+            NotReadableError: "Another app is using the camera. Close it and try again."
           };
-          errorMessage.textContent = messages[error.name] || "Unable to start the camera. Check your device and try again.";
+          errorMessage.textContent = messages[error.name] || "The camera could not start. Check your device and try again.";
           if (stream) stream.getTracks().forEach((track) => track.stop());
           stream = null;
           video.srcObject = null;
@@ -585,15 +605,15 @@
       const sketchControls = document.querySelector("#sketchControls");
 
       if (!window.isSecureContext) {
-        errorMessage.textContent = "Camera and headset XR need a secure page. On a headset, use HTTPS with a certificate trusted by that headset; localhost only works on this device.";
+        errorMessage.textContent = "Headset mode needs a secure (https) page. Open the Sketch VR link to use it.";
       } else if (!navigator.xr) {
-        errorMessage.textContent = "Headset XR is unavailable in this browser. Open this page in a WebXR-capable browser or enable the Immersive Web Emulator.";
+        errorMessage.textContent = "Headset mode isn't available in this browser. Open the page in the Meta Quest Browser, or turn on the Immersive Web Emulator to test.";
       } else {
         try {
           const arSupported = await navigator.xr.isSessionSupported("immersive-ar");
           const vrSupported = await navigator.xr.isSessionSupported("immersive-vr");
           if (!arSupported && !vrSupported) {
-            errorMessage.textContent = "Immersive AR and VR are unavailable. Enable the Immersive Web Emulator or use a supported headset browser.";
+            errorMessage.textContent = "Headset mode isn't available here. Use the Meta Quest Browser, or turn on the Immersive Web Emulator to test.";
           } else {
             const xrSessionMode = arSupported ? "immersive-ar" : "immersive-vr";
             xrButton.textContent = arSupported ? "Enter headset AR" : "Test in VR emulator";
@@ -641,9 +661,8 @@
 
             const sketch = document.querySelector(".sketch-overlay");
             if (!sketch.getAttribute("src")) {
-              errorMessage.textContent = "Upload a sketch to enable headset mode.";
+              bottomNote.textContent = "Choose a sketch to enable headset mode";
               await new Promise((resolve) => document.addEventListener("sketchimagechange", resolve, { once: true }));
-              errorMessage.textContent = "";
             }
             await sketch.decode();
             const texture = new THREE.Texture(sketch);
@@ -717,22 +736,27 @@
 
             function drawXRControlPanel() {
               xrControlContext.clearRect(0, 0, xrControlCanvas.width, xrControlCanvas.height);
+              xrControlContext.fillStyle = "rgba(22, 22, 20, 0.88)";
+              xrControlContext.fillRect(0, 0, xrControlCanvas.width, xrControlCanvas.height);
               xrControlContext.textAlign = "center";
               xrControlContext.textBaseline = "middle";
               const opacity = document.querySelector("#sketchOpacity").value;
               const size = document.querySelector("#sketchSize").value;
-              xrControlContext.fillStyle = "#eef1e9";
-              xrControlContext.font = "600 19px sans-serif";
+              xrControlContext.fillStyle = "#ffffff";
+              xrControlContext.font = "600 26px sans-serif";
               xrControlContext.fillText(`OPACITY ${opacity}%`, 210, 26);
-              xrControlContext.fillText(`SIZE ${size}%`, 210, 134);
+              xrControlContext.fillText(`SIZE ${size}%`, 210, 140);
               xrControlContext.fillText("DISTANCE", 210, 258);
 
               for (const target of xrControlTargets) {
                 const active = target.id === hoveredXRControl;
-                xrControlContext.fillStyle = active ? "#d4f36a" : "#eef1e9";
+                xrControlContext.strokeStyle = active ? "#d4f36a" : "rgba(255, 255, 255, 0.35)";
+                xrControlContext.lineWidth = 3;
+                xrControlContext.strokeRect(target.x + 1.5, target.y + 1.5, target.width - 3, target.height - 3);
+                xrControlContext.fillStyle = active ? "#d4f36a" : "#ffffff";
                 xrControlContext.font = target.id.endsWith("-down") || target.id.endsWith("-up")
-                  ? "48px sans-serif"
-                  : "600 18px sans-serif";
+                  ? "600 56px sans-serif"
+                  : "600 24px sans-serif";
                 xrControlContext.fillText(target.label, target.x + target.width / 2, target.y + target.height / 2);
               }
               xrControlTexture.needsUpdate = true;
@@ -831,7 +855,7 @@
                 plane: dragPlane,
                 offset: overlay.position.clone().sub(localHit)
               };
-              xrPlacementHint.textContent = "Dragging sketch · release trigger to drop";
+              xrPlacementHint.textContent = "Dragging · release the trigger to drop it";
             }
 
             function updateSketchDrag(record) {
@@ -937,7 +961,7 @@
                 xrControlPanel.visible = true;
                 hoveredXRControl = null;
                 drawXRControlPanel();
-                xrPlacementHint.textContent = "Aim at a surface and press the trigger to fix again";
+                xrPlacementHint.textContent = "Aim at a wall and pull the trigger to pin it again";
               } else {
                 placementRequested = true;
               }
@@ -980,7 +1004,7 @@
               drawXRControlPanel();
               reticle.visible = false;
               overlay.position.z = 0.012;
-              xrPlacementHint.textContent = "Press the controller trigger to fix or unfix";
+              xrPlacementHint.textContent = "Pull the trigger to pin the sketch to a wall";
               previousFrameTime = null;
               renderer.setAnimationLoop((time, frame) => {
                 if (frame) {
@@ -1034,7 +1058,7 @@
                       if (pressed) updateSketchDrag(record);
                       else {
                         record.dragging = null;
-                        xrPlacementHint.textContent = "Fixed · trigger the sketch to drag, or select UNFIX";
+                        xrPlacementHint.textContent = "Pinned · pull the trigger on the sketch to drag it, or tap UNFIX";
                       }
                     }
                     previousButtonStates.set(inputSource, pressed);
@@ -1050,7 +1074,7 @@
                     xrControlPanel.visible = false;
                     hoveredXRControl = null;
                     unfixButton.visible = true;
-                    xrPlacementHint.textContent = "Fixed · trigger the sketch to drag, or select UNFIX";
+                    xrPlacementHint.textContent = "Pinned · pull the trigger on the sketch to drag it, or tap UNFIX";
                     if (typeof frame.createAnchor === "function") {
                       const position = new THREE.Vector3();
                       const orientation = new THREE.Quaternion();
@@ -1088,8 +1112,8 @@
                   reticle.visible = hasTarget && !isFixed;
                   if (!isFixed) {
                     xrPlacementHint.textContent = hasTarget
-                      ? "Surface found · press the controller trigger to fix"
-                      : "No plane found · press the controller trigger to place in front";
+                      ? "Wall found · pull the trigger to pin the sketch here"
+                      : "No wall found · pull the trigger to place it in front of you";
                   }
                 }
                 renderer.render(scene, camera);
@@ -1136,7 +1160,7 @@
 
           }
         } catch (error) {
-          errorMessage.textContent = "Unable to load headset AR support. Check your connection and use the camera preview instead.";
+          errorMessage.textContent = "Headset support didn't load. Check your connection and reload the page. The camera view still works.";
         }
       }
     </script>
