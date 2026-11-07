@@ -18,11 +18,12 @@ Trace a sketch onto the real world. Overlay it on your camera in the browser, or
 
 | Action | How |
 | --- | --- |
-| Pin the sketch | Aim at a wall, pull the trigger |
-| Slide it along the wall | Thumbstick (while pinned) |
-| Drag it | Pull the trigger on the sketch, then release |
+| Pin the sketch | Aim at a wall, press **A** (right) or **X** (left), or pull the trigger |
+| Slide it along the wall | Hold grip and push the thumbstick (while pinned) |
+| Unpin | Press **A** or **X** again (no aiming needed) |
 | Opacity, size, distance | Aim at the panel buttons, pull the trigger |
-| Unpin | Aim at **UNFIX**, pull the trigger |
+
+Once pinned, the sketch only moves when you hold grip and push a thumbstick. Hands and pens are ignored, so you can put the controllers down and draw on paper without the sketch moving.
 
 ## Run it locally
 

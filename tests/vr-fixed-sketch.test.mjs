@@ -5,8 +5,9 @@
 //   - pressing the trigger fixes the sketch in space,
 //   - the fixed sketch does not move when the head turns or the user walks,
 //   - the thumbstick slides a fixed sketch along the wall,
+//   - the trigger on the fixed sketch does not drag it,
 //   - the trigger on empty space does not unfix it,
-//   - pressing UNFIX releases it, so it follows the view again.
+//   - pressing A (right) or X (left) toggles it: pin, then release so it follows the view again.
 //
 // Requires: npm install, and Google Chrome installed (or set CHROME_CHANNEL="" and
 // CHROME_PATH to a Chromium binary). Three.js is loaded from the CDN, so the
@@ -127,19 +128,6 @@ const sketchPosition = () => page.evaluate(() => {
   return { x: e[12], y: e[13], z: e[14] };
 });
 
-// World position of the UNFIX button (a 0.16 x 0.04 plane attached to the camera).
-const unfixPosition = () => page.evaluate(() => {
-  let found = null;
-  window.__scene.updateMatrixWorld(true);
-  window.__scene.traverse((object) => {
-    if (found || !object.isMesh) return;
-    const p = object.geometry.parameters;
-    if (p && Math.abs(p.width - 0.16) < 1e-6 && Math.abs(p.height - 0.04) < 1e-6) found = object;
-  });
-  const e = found.matrixWorld.elements;
-  return { x: e[12], y: e[13], z: e[14] };
-});
-
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 
 // Press and release the right controller trigger.
@@ -216,7 +204,27 @@ test("fixed sketch stays in place when the user walks", async () => {
   assertNoErrors();
 });
 
-test("thumbstick slides a fixed sketch along the wall", async () => {
+// Hold or release the grip (squeeze) button on the right controller.
+const setGrip = (value) => page.evaluate((v) => window.__iwer.controllers.right.updateButtonValue("squeeze", v), value);
+
+test("thumbstick slides a fixed sketch along the wall while grip is held", async () => {
+  await enterHeadset();
+  await pressTrigger();
+  const before = await sketchPosition();
+
+  await setGrip(1);
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 1, 0));
+  await frames(30);
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 0, 0));
+  await setGrip(0);
+  await frames(5);
+  const after = await sketchPosition();
+  assert.ok(distance(before, after) > 0.01, "thumbstick with grip held should move the fixed sketch");
+  assert.match(await hint(), /^Pinned/);
+  assertNoErrors();
+});
+
+test("thumbstick without grip does not move a fixed sketch", async () => {
   await enterHeadset();
   await pressTrigger();
   const before = await sketchPosition();
@@ -226,8 +234,7 @@ test("thumbstick slides a fixed sketch along the wall", async () => {
   await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 0, 0));
   await frames(5);
   const after = await sketchPosition();
-  assert.ok(distance(before, after) > 0.01, "thumbstick should move the fixed sketch");
-  assert.match(await hint(), /^Pinned/);
+  assert.ok(distance(before, after) < 1e-4, `stick without grip moved the sketch by ${distance(before, after)} m`);
   assertNoErrors();
 });
 
@@ -240,17 +247,51 @@ test("trigger on empty space does not unfix the sketch", async () => {
   assertNoErrors();
 });
 
-test("UNFIX releases the sketch so it follows the view again", async () => {
+test("trigger on the fixed sketch does not drag it", async () => {
+  await enterHeadset();
+  await pressTrigger();
+  const before = await sketchPosition();
+
+  // Aim at the sketch, hold the trigger and sweep the controller sideways.
+  await aimRightControllerAt(before);
+  await page.evaluate(() => window.__iwer.controllers.right.updateButtonValue("trigger", 1));
+  await frames(3);
+  await page.evaluate(() => {
+    const c = window.__iwer.controllers.right;
+    c.position.x += 0.4;
+  });
+  await frames(10);
+  await page.evaluate(() => window.__iwer.controllers.right.updateButtonValue("trigger", 0));
+  await frames(5);
+
+  const after = await sketchPosition();
+  assert.ok(distance(before, after) < 1e-4, `fixed sketch moved by ${distance(before, after)} m from a trigger drag`);
+  assert.match(await hint(), /^Pinned/);
+  assertNoErrors();
+});
+
+// Press and release the A button on the right controller (no aiming needed).
+async function pressA() {
+  await page.evaluate(() => window.__iwer.controllers.right.updateButtonValue("a-button", 1));
+  await frames(3);
+  await page.evaluate(() => window.__iwer.controllers.right.updateButtonValue("a-button", 0));
+  await frames(5);
+}
+
+test("A button pins and releases the sketch, so it follows the view again", async () => {
   await enterHeadset();
   await pressTrigger();
   assert.match(await hint(), /^Pinned/, "precondition: the sketch must be fixed first");
-  await aimRightControllerAt(await unfixPosition());
-  await pressTrigger();
-  assert.match(await hint(), /Wall found|No wall found|Aim/, "UNFIX should return to placement mode");
+  await pressA();
+  assert.match(await hint(), /Wall found|No wall found|Aim/, "A should release the sketch");
+  await pressA();
+  assert.match(await hint(), /^Pinned/, "A again should pin it, with no aiming needed");
+  await pressA();
+  assert.match(await hint(), /Wall found|No wall found|Aim/, "A should release it again");
 
   const before = await sketchPosition();
   await turnHead(60);
   const after = await sketchPosition();
-  assert.ok(distance(before, after) > 0.05, "after UNFIX the sketch should move with the head");
+  assert.ok(distance(before, after) > 0.05, "after releasing, the sketch should move with the head");
   assertNoErrors();
 });

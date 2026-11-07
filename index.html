@@ -643,7 +643,7 @@
               );
               ray.visible = false;
               controller.add(ray);
-              const record = { controller, inputSource: null, ray, dragging: null };
+              const record = { controller, inputSource: null, ray };
               controllerRecords.push(record);
               scene.add(controller);
               controller.addEventListener("connected", (event) => {
@@ -698,31 +698,6 @@
             xrControlPanel.position.set(0.2, 0.2, -0.58);
             xrControlPanel.renderOrder = 20;
             camera.add(xrControlPanel);
-
-            const unfixCanvas = document.createElement("canvas");
-            unfixCanvas.width = 256;
-            unfixCanvas.height = 64;
-            const unfixContext = unfixCanvas.getContext("2d");
-            unfixContext.fillStyle = "rgba(16, 19, 17, 0.92)";
-            unfixContext.fillRect(2, 2, 252, 60);
-            unfixContext.strokeStyle = "#d4f36a";
-            unfixContext.lineWidth = 3;
-            unfixContext.strokeRect(3.5, 3.5, 249, 57);
-            unfixContext.fillStyle = "#d4f36a";
-            unfixContext.font = "600 30px sans-serif";
-            unfixContext.textAlign = "center";
-            unfixContext.textBaseline = "middle";
-            unfixContext.fillText("UNFIX", 128, 32);
-            const unfixTexture = new THREE.CanvasTexture(unfixCanvas);
-            unfixTexture.colorSpace = THREE.SRGBColorSpace;
-            const unfixButton = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.16, 0.04),
-              new THREE.MeshBasicMaterial({ map: unfixTexture, transparent: true, depthTest: false, depthWrite: false })
-            );
-            unfixButton.position.set(0.2, 0.41, -0.58);
-            unfixButton.renderOrder = 21;
-            unfixButton.visible = false;
-            camera.add(unfixButton);
 
             const xrControlTargets = [
               { id: "opacity-down", x: 12, y: 48, width: 170, height: 78, label: "−" },
@@ -819,11 +794,15 @@
             const previewMatrix = new THREE.Matrix4();
             const previousButtonStates = new Map();
             const triggerButtonIndex = 0;
+            // Standard XR gamepad index 4: A on the right controller, X on the left.
+            const faceButtonIndex = 4;
+            // Standard XR gamepad index 1: the grip (squeeze) button on either controller.
+            const gripButtonIndex = 1;
+            const previousFaceStates = new Map();
             const controllerRaycaster = new THREE.Raycaster();
             const controllerPosition = new THREE.Vector3();
             const controllerQuaternion = new THREE.Quaternion();
             const controllerDirection = new THREE.Vector3();
-            const dragWorldPoint = new THREE.Vector3();
             const joystickMoveSpeed = 1;
             let previousFrameTime = null;
 
@@ -845,45 +824,36 @@
               ) || null;
             }
 
-            function startSketchDrag(record, intersection) {
-              placement.updateMatrixWorld(true);
-              const planeNormal = new THREE.Vector3(0, 0, 1).transformDirection(placement.matrixWorld);
-              const planeOrigin = overlay.getWorldPosition(new THREE.Vector3());
-              const dragPlane = new THREE.Plane().setFromNormalAndCoplanarPoint(planeNormal, planeOrigin);
-              const localHit = placement.worldToLocal(intersection.point.clone());
-              record.dragging = {
-                plane: dragPlane,
-                offset: overlay.position.clone().sub(localHit)
-              };
-              xrPlacementHint.textContent = "Dragging · release the trigger to drop it";
-            }
-
-            function updateSketchDrag(record) {
-              if (!record.dragging) return;
-              placement.updateMatrixWorld(true);
-              if (!controllerRaycaster.ray.intersectPlane(record.dragging.plane, dragWorldPoint)) return;
-              const localPoint = placement.worldToLocal(dragWorldPoint.clone());
-              overlay.position.x = localPoint.x + record.dragging.offset.x;
-              overlay.position.y = localPoint.y + record.dragging.offset.y;
-            }
-
             function applyJoystickDeadzone(value) {
               const magnitude = Math.abs(value);
               if (magnitude <= 0.18) return 0;
               return Math.sign(value) * ((magnitude - 0.18) / 0.82);
             }
 
+            // Only a real hand-held controller's thumbstick may move a fixed sketch.
+            // Hands, transient pointers and other gamepads are ignored, so a hand or
+            // a pen in view can never slide the sketch.
+            function isThumbstickController(inputSource) {
+              return Boolean(inputSource.gamepad) &&
+                !inputSource.hand &&
+                inputSource.targetRayMode === "tracked-pointer" &&
+                (inputSource.handedness === "left" || inputSource.handedness === "right");
+            }
+
+            // Quest thumbstick sits on axes[2] and axes[3] (axes[0] and axes[1] are unused).
             function getJoystickInput(session) {
               let movement = { x: 0, y: 0 };
               let strongestInput = 0;
               for (const inputSource of session.inputSources) {
-                const axes = inputSource.gamepad?.axes;
-                if (!axes || axes.length < 2) continue;
-                for (let axis = 0; axis + 1 < axes.length; axis += 2) {
-                  const x = applyJoystickDeadzone(axes[axis]);
-                  const y = applyJoystickDeadzone(axes[axis + 1]);
-                  const strength = Math.hypot(x, y);
-                  if (strength <= strongestInput) continue;
+                if (!isThumbstickController(inputSource)) continue;
+                // The grip must be held, so bumping the stick while the controllers are down does nothing.
+                if (!inputSource.gamepad.buttons[gripButtonIndex]?.pressed) continue;
+                const axes = inputSource.gamepad.axes;
+                const base = axes.length >= 4 ? 2 : 0;
+                const x = applyJoystickDeadzone(axes[base] ?? 0);
+                const y = applyJoystickDeadzone(axes[base + 1] ?? 0);
+                const strength = Math.hypot(x, y);
+                if (strength > strongestInput) {
                   movement = { x, y };
                   strongestInput = strength;
                 }
@@ -957,11 +927,10 @@
                 anchorGeneration += 1;
                 overlay.position.x = 0;
                 overlay.position.y = 0;
-                unfixButton.visible = false;
                 xrControlPanel.visible = true;
                 hoveredXRControl = null;
                 drawXRControlPanel();
-                xrPlacementHint.textContent = "Aim at a wall and pull the trigger to pin it again";
+                xrPlacementHint.textContent = "Aim at a wall and press A to pin it again";
               } else {
                 placementRequested = true;
               }
@@ -999,12 +968,11 @@
               overlay.visible = true;
               overlay.position.set(0, 0, 0.012);
               xrControlPanel.visible = true;
-              unfixButton.visible = false;
               hoveredXRControl = null;
               drawXRControlPanel();
               reticle.visible = false;
               overlay.position.z = 0.012;
-              xrPlacementHint.textContent = "Pull the trigger to pin the sketch to a wall";
+              xrPlacementHint.textContent = "Pull the trigger or press A to pin the sketch to a wall";
               previousFrameTime = null;
               renderer.setAnimationLoop((time, frame) => {
                 if (frame) {
@@ -1026,41 +994,29 @@
                     const wasPressed = previousButtonStates.get(inputSource) || false;
                     let control = null;
                     let panelHit = null;
-                    let unfixHit = null;
-                    let sketchHit = null;
                     if (record) {
                       setControllerRay(record.controller);
                       if (xrControlPanel.visible) {
                         panelHit = controllerRaycaster.intersectObject(xrControlPanel, false)[0] || null;
                         control = findXRControl(panelHit);
                       }
-                      if (unfixButton.visible) {
-                        unfixHit = controllerRaycaster.intersectObject(unfixButton, false)[0] || null;
-                      }
-                      if (isFixed && !control && !panelHit && !unfixHit) {
-                        sketchHit = controllerRaycaster.intersectObject(overlay, false)[0] || null;
-                      }
                       const nextHovered = control?.id || null;
                       if (nextHovered !== hoveredXRControl) {
                         hoveredXRControl = nextHovered;
                         drawXRControlPanel();
                       }
-                      record.ray.material.color.set(control || unfixHit || sketchHit ? 0xd4f36a : 0xeef1e9);
+                      record.ray.material.color.set(control ? 0xd4f36a : 0xeef1e9);
                     }
 
-                    if (pressed && !wasPressed) {
+                    if (pressed && !wasPressed && record) {
                       if (control) activateXRControl(control.id);
-                      else if (unfixHit) togglePlacement();
-                      else if (isFixed && sketchHit && record) startSketchDrag(record, sketchHit);
                       else if (!isFixed && !panelHit) togglePlacement();
                     }
-                    if (record?.dragging) {
-                      if (pressed) updateSketchDrag(record);
-                      else {
-                        record.dragging = null;
-                        xrPlacementHint.textContent = "Pinned · pull the trigger on the sketch to drag it, or tap UNFIX";
-                      }
-                    }
+                    // A (right) or X (left) toggles: pins where you aim, or releases.
+                    const faceDown = Boolean(inputSource.gamepad.buttons[faceButtonIndex]?.pressed);
+                    const faceWasDown = previousFaceStates.get(inputSource) || false;
+                    if (faceDown && !faceWasDown) togglePlacement();
+                    previousFaceStates.set(inputSource, faceDown);
                     previousButtonStates.set(inputSource, pressed);
                   }
 
@@ -1073,8 +1029,7 @@
                     hasBeenPlaced = true;
                     xrControlPanel.visible = false;
                     hoveredXRControl = null;
-                    unfixButton.visible = true;
-                    xrPlacementHint.textContent = "Pinned · pull the trigger on the sketch to drag it, or tap UNFIX";
+                    xrPlacementHint.textContent = "Pinned · hold grip and push the thumbstick to slide it, press A to release";
                     if (typeof frame.createAnchor === "function") {
                       const position = new THREE.Vector3();
                       const orientation = new THREE.Quaternion();
@@ -1101,7 +1056,7 @@
                     placement.matrix.fromArray(viewerPose.transform.matrix).multiply(previewOffset);
                   }
 
-                  if (isFixed && !controllerRecords.some((record) => record.dragging)) {
+                  if (isFixed) {
                     const movement = getJoystickInput(session);
                     overlay.position.x += movement.x * joystickMoveSpeed * deltaSeconds;
                     overlay.position.y -= movement.y * joystickMoveSpeed * deltaSeconds;
@@ -1112,8 +1067,8 @@
                   reticle.visible = hasTarget && !isFixed;
                   if (!isFixed) {
                     xrPlacementHint.textContent = hasTarget
-                      ? "Wall found · pull the trigger to pin the sketch here"
-                      : "No wall found · pull the trigger to place it in front of you";
+                      ? "Wall found · pull the trigger or press A to pin the sketch here"
+                      : "No wall found · pull the trigger or press A to place it in front of you";
                   }
                 }
                 renderer.render(scene, camera);
@@ -1127,10 +1082,10 @@
               placementAnchor = null;
               isFixed = false;
               hasBeenPlaced = false;
-              unfixButton.visible = false;
               anchorGeneration += 1;
               placementRequested = false;
               previousButtonStates.clear();
+              previousFaceStates.clear();
               document.body.classList.remove("xr-active");
               sketchSize.dispatchEvent(new Event("input", { bubbles: true }));
               statusText.textContent = "Camera off";
