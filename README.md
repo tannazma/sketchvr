@@ -16,19 +16,21 @@ Trace a sketch onto the real world. Overlay it on your camera in the browser, or
 
 ## Headset controls
 
-| Action | How |
-| --- | --- |
-| Aim | Point the controller at a wall or table like a laser pointer. No need to turn your head. |
-| Pin the sketch | Press **A** (right) or **X** (left), or pull the trigger |
-| Unpin | Press **A** or **X** again |
-| Short or long aim distance (when no surface is hit) | Hold grip and push the thumbstick up (closer) or down (farther) |
-| Slide the pinned sketch sideways | Hold grip and push the thumbstick left or right |
-| Nearer or farther (pinned) | Hold grip and push the thumbstick up (nearer) or down (farther). Or use the NEARER / FARTHER buttons on the menu |
-| Move the menu | Push the thumbstick (when not pinned), or hold grip on an empty part of the menu and move the controller |
-| Menu buttons | Aim at the menu and pull the trigger: opacity, size, nearer/farther, HIDE |
-| Hide / show the menu | HIDE button on the menu, or press **B** (right) or **Y** (left) |
+The same guide is in the headset: press **HELP** on the right side of your view.
 
-The menu stays visible before and after pinning. Once pinned, the sketch only moves while you hold grip and push the thumbstick. Hands and pens are ignored, so you can draw on the paper without the sketch moving.
+| What you want to do | What to do |
+| --- | --- |
+| Place the sketch | Point the controller at the table or wall, like a laser pointer. You don't need to turn your head. |
+| Lock it / unlock it | Press **A** (right hand) or **X** (left hand). Press again to unlock. |
+| Closer or farther, before locking | Hold the side button and push the stick up (closer) or down (farther). |
+| Closer or farther, after locking | Hold the side button and push the stick up or down. |
+| Slide it sideways, after locking | Hold the side button and push the stick left or right. |
+| Move the menu | Push the stick. Or hold the side button on an empty part of the menu and drag. |
+| Hide the menu | Press **HIDE**. |
+| Show the menu again | Aim at the **MENU** tab and pull the trigger, or press **B** (right) or **Y** (left). |
+| Open or close the guide | Aim at the **HELP** tab and pull the trigger. |
+
+Hands and pens never move the drawing. Once locked, the sketch only moves while you hold the side button and push the stick.
 
 ## Run it locally
 

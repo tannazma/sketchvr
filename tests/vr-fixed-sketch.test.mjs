@@ -104,6 +104,8 @@ async function enterHeadset() {
   await page.waitForFunction(() => window.__scene, null, { timeout: 15000 });
   await frames(5);
   headHeight = await page.evaluate(() => window.__iwer.position.y);
+  // Start with the controller pointing at open space (not at the menu), as a player would.
+  await aimRightControllerAt({ x: 0, y: 1.0, z: -1.5 });
 }
 
 const frames = (count) => page.evaluate((n) => new Promise((resolve) => {
@@ -401,14 +403,14 @@ test("B hides the menu and shows it again", async () => {
   assertNoErrors();
 });
 
-// World position of the MENU tab (a 0.12 x 0.045 plane attached to the camera).
+// World position of the MENU tab (a small plane attached to the camera).
 const tabWorld = () => page.evaluate(() => {
   let found = null;
   window.__scene.updateMatrixWorld(true);
   window.__scene.traverse((object) => {
     if (found || !object.isMesh) return;
     const p = object.geometry.parameters;
-    if (p && Math.abs(p.width - 0.12) < 1e-6 && Math.abs(p.height - 0.045) < 1e-6) found = object;
+    if (object.name === "menuTab") found = object;
   });
   const e = found.matrixWorld.elements;
   return { x: e[12], y: e[13], z: e[14] };
@@ -422,6 +424,32 @@ test("the MENU tab shows the hidden menu again, without pinning the sketch", asy
   await pressTrigger();
   assert.equal(await panelShown(), true, "pulling the trigger on the MENU tab should show the menu");
   assert.doesNotMatch(await hint(), /^Pinned/, "the tab press must not pin the sketch");
+  assertNoErrors();
+});
+
+// Is the guide card shown? Looks it up by name.
+const helpShown = () => page.evaluate(() => {
+  let found = null;
+  window.__scene.traverse((object) => { if (object.name === "helpCard") found = object; });
+  return found.visible;
+});
+
+test("the HELP tab on the right opens and closes the guide without pinning", async () => {
+  await enterHeadset();
+  assert.equal(await helpShown(), false, "precondition: guide closed");
+  const target = await page.evaluate(() => {
+    let found = null;
+    window.__scene.updateMatrixWorld(true);
+    window.__scene.traverse((object) => { if (object.name === "helpTab") found = object; });
+    const e = found.matrixWorld.elements;
+    return { x: e[12], y: e[13], z: e[14] };
+  });
+  await aimRightControllerAt(target);
+  await pressTrigger();
+  assert.equal(await helpShown(), true, "HELP tab should open the guide");
+  assert.doesNotMatch(await hint(), /^Pinned/, "the HELP tab must not pin the sketch");
+  await pressTrigger();
+  assert.equal(await helpShown(), false, "HELP tab again should close the guide");
   assertNoErrors();
 });
 

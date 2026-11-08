@@ -695,52 +695,106 @@
               new THREE.PlaneGeometry(0.32, 0.275),
               new THREE.MeshBasicMaterial({ map: xrControlTexture, transparent: true, depthTest: false, depthWrite: false })
             );
-            xrControlPanel.position.set(0.2, 0.2, -0.58);
+            xrControlPanel.position.set(0.2, -0.1, -0.58);
             xrControlPanel.renderOrder = 20;
             camera.add(xrControlPanel);
 
-            // In-headset guide card, shown under the menu when HELP is pressed.
+            // Guide card on the right side of the view, opened by the HELP tab (separate from the menu).
             const helpCanvas = document.createElement("canvas");
             helpCanvas.width = 420;
-            helpCanvas.height = 420;
+            helpCanvas.height = 720;
             const helpContext = helpCanvas.getContext("2d");
             helpContext.fillStyle = "rgba(22, 22, 20, 0.94)";
-            helpContext.fillRect(0, 0, 420, 420);
+            helpContext.fillRect(0, 0, 420, 720);
             helpContext.textAlign = "left";
             helpContext.textBaseline = "top";
-            helpContext.fillStyle = "#d4f36a";
-            helpContext.font = "600 22px sans-serif";
-            helpContext.fillText("HOW TO USE", 16, 14);
-            helpContext.font = "17px sans-serif";
-            const helpLines = [
-              "1. Point the controller at a wall or table,",
-              "   like a laser pointer. No need to turn your head.",
-              "2. Press A or X (or pull the trigger) to pin.",
-              "   Press again to release.",
-              "Distance before pinning (when nothing is hit):",
-              "   Hold GRIP + stick: UP = closer, DOWN = farther.",
-              "After pinning, to place it exactly:",
-              "   Hold GRIP, push stick LEFT/RIGHT = slide.",
-              "   Hold GRIP + stick: UP/DOWN = nearer/farther.",
-              "Menu: push the stick to move it (not pinned),",
-              "   or hold GRIP on an empty part and drag it.",
-              "HIDE hides the menu. B or Y shows or hides it.",
-              "Hands and pens never move the drawing."
+            // Each entry: a heading (h) or a line of text (t). Long lines wrap automatically.
+            const helpEntries = [
+              { h: "Place your sketch" },
+              { t: "Point the controller at the table or wall, like a laser pointer. You don't need to turn your head." },
+              { t: "Press A (right hand) or X (left hand) to lock it. Press again to unlock." },
+              { h: "Closer or farther" },
+              { t: "Before locking: hold the side button and push the stick up to move it closer, or down to move it farther." },
+              { t: "After locking: hold the side button and push up or down to move it nearer or farther." },
+              { h: "Slide it" },
+              { t: "After locking: hold the side button and push the stick left or right." },
+              { h: "The menu" },
+              { t: "Push the stick to move the menu. Or hold the side button on an empty part of it and drag." },
+              { t: "Press HIDE to hide it. To bring it back, aim at MENU and pull the trigger, or press B (right) or Y (left)." },
+              { h: "Good to know" },
+              { t: "Your hands and your pen never move the drawing." }
             ];
-            helpLines.forEach((line, index) => {
-              helpContext.fillStyle = "#ffffff";
-              helpContext.fillText(line.trim(), line.startsWith("   ") ? 34 : 16, 56 + index * 26);
-            });
+            function wrapText(text, x, y, maxWidth, lineHeight) {
+              const words = text.split(" ");
+              let line = "";
+              for (const word of words) {
+                const test = line ? `${line} ${word}` : word;
+                if (helpContext.measureText(test).width > maxWidth && line) {
+                  helpContext.fillText(line, x, y);
+                  line = word;
+                  y += lineHeight;
+                } else {
+                  line = test;
+                }
+              }
+              if (line) helpContext.fillText(line, x, y);
+              return y + lineHeight;
+            }
+            let helpY = 16;
+            helpContext.fillStyle = "#d4f36a";
+            helpContext.font = "600 24px sans-serif";
+            helpContext.fillText("How to use Sketch VR", 16, helpY);
+            helpY += 44;
+            for (const entry of helpEntries) {
+              if (entry.h) {
+                helpY += 6;
+                helpContext.fillStyle = "#d4f36a";
+                helpContext.font = "600 20px sans-serif";
+                helpContext.fillText(entry.h, 16, helpY);
+                helpY += 30;
+              } else {
+                helpContext.fillStyle = "#ffffff";
+                helpContext.font = "18px sans-serif";
+                helpY = wrapText(entry.t, 16, helpY, 388, 24);
+              }
+            }
             const helpTexture = new THREE.CanvasTexture(helpCanvas);
             helpTexture.colorSpace = THREE.SRGBColorSpace;
             const helpCard = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.32, 0.32),
+              new THREE.PlaneGeometry(0.3, 0.514),
               new THREE.MeshBasicMaterial({ map: helpTexture, transparent: true, depthTest: false, depthWrite: false })
             );
-            helpCard.position.set(0, -0.3175, 0.001);
+            helpCard.position.set(0.3, -0.18, -0.5);
             helpCard.renderOrder = 20;
+            helpCard.name = "helpCard";
             helpCard.visible = false;
-            xrControlPanel.add(helpCard);
+            camera.add(helpCard);
+
+            // HELP tab on the right side of the view: always visible, opens and closes the guide card.
+            const helpTabCanvas = document.createElement("canvas");
+            helpTabCanvas.width = 256;
+            helpTabCanvas.height = 96;
+            const helpTabContext = helpTabCanvas.getContext("2d");
+            helpTabContext.fillStyle = "rgba(16, 19, 17, 0.92)";
+            helpTabContext.fillRect(2, 2, 252, 92);
+            helpTabContext.strokeStyle = "#d4f36a";
+            helpTabContext.lineWidth = 4;
+            helpTabContext.strokeRect(4, 4, 248, 88);
+            helpTabContext.fillStyle = "#d4f36a";
+            helpTabContext.font = "600 44px sans-serif";
+            helpTabContext.textAlign = "center";
+            helpTabContext.textBaseline = "middle";
+            helpTabContext.fillText("HELP", 128, 48);
+            const helpTabTexture = new THREE.CanvasTexture(helpTabCanvas);
+            helpTabTexture.colorSpace = THREE.SRGBColorSpace;
+            const helpTab = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.12, 0.045),
+              new THREE.MeshBasicMaterial({ map: helpTabTexture, transparent: true, depthTest: false, depthWrite: false })
+            );
+            helpTab.name = "helpTab";
+            helpTab.position.set(0.3, 0.14, -0.5);
+            helpTab.renderOrder = 21;
+            camera.add(helpTab);
 
             // Small MENU tab, shown only while the menu is hidden: aim at it and pull the trigger.
             const menuTabCanvas = document.createElement("canvas");
@@ -763,6 +817,7 @@
               new THREE.PlaneGeometry(0.12, 0.045),
               new THREE.MeshBasicMaterial({ map: menuTabTexture, transparent: true, depthTest: false, depthWrite: false })
             );
+            menuTab.name = "menuTab";
             menuTab.position.set(0.2, -0.22, -0.5);
             menuTab.renderOrder = 21;
             menuTab.visible = false;
@@ -776,7 +831,6 @@
               { id: "size-up", x: 220, y: 164, width: 188, height: 72, label: "+" },
               { id: "depth-near", x: 12, y: 284, width: 188, height: 72, label: "NEARER" },
               { id: "depth-far", x: 220, y: 284, width: 188, height: 72, label: "FARTHER" },
-              { id: "help", x: 12, y: 6, width: 96, height: 32, label: "HELP" },
               { id: "hide", x: 312, y: 6, width: 96, height: 32, label: "HIDE" }
             ];
             let hoveredXRControl = null;
@@ -803,7 +857,7 @@
                 xrControlContext.fillStyle = active ? "#d4f36a" : "#ffffff";
                 xrControlContext.font = target.id.endsWith("-down") || target.id.endsWith("-up")
                   ? "600 56px sans-serif"
-                  : target.id === "help" || target.id === "hide"
+                  : target.id === "hide"
                     ? "600 18px sans-serif"
                     : "600 22px sans-serif";
                 xrControlContext.fillText(target.label, target.x + target.width / 2, target.y + target.height / 2);
@@ -815,7 +869,6 @@
               panelHidden = hidden;
               xrControlPanel.visible = !hidden;
               menuTab.visible = hidden;
-              if (hidden) helpCard.visible = false;
               hoveredXRControl = null;
               if (hidden) panelDrag = null;
             }
@@ -823,10 +876,6 @@
             function activateXRControl(id) {
               if (id === "hide") {
                 setPanelHidden(true);
-                return;
-              }
-              if (id === "help") {
-                helpCard.visible = !helpCard.visible;
                 return;
               }
               if (id.startsWith("depth-")) {
@@ -1128,7 +1177,7 @@
               reticle.visible = false;
               overlay.position.z = 0.012;
               camera.add(xrControlPanel);
-              xrControlPanel.position.set(0.2, 0.2, -0.58);
+              xrControlPanel.position.set(0.2, -0.1, -0.58);
               xrControlPanel.rotation.set(0, 0, 0);
               xrPlacementHint.textContent = "Pull the trigger or press A to pin the sketch · push the thumbstick to move the panel";
               previousFrameTime = null;
@@ -1175,6 +1224,7 @@
                     let control = null;
                     let panelHit = null;
                     let tabHit = null;
+                    let helpTabHit = null;
                     if (record) {
                       setControllerRay(record.controller);
                       if (xrControlPanel.visible) {
@@ -1184,6 +1234,7 @@
                       if (menuTab.visible) {
                         tabHit = controllerRaycaster.intersectObject(menuTab, false)[0] || null;
                       }
+                      helpTabHit = controllerRaycaster.intersectObject(helpTab, false)[0] || null;
                       const nextHovered = control?.id || null;
                       if (nextHovered !== hoveredXRControl) {
                         hoveredXRControl = nextHovered;
@@ -1195,6 +1246,7 @@
                     if (pressed && !wasPressed && record) {
                       if (control) activateXRControl(control.id);
                       else if (tabHit) setPanelHidden(false);
+                      else if (helpTabHit) helpCard.visible = !helpCard.visible;
                       else if (!isFixed && !panelHit) togglePlacement();
                     }
                     // A (right) or X (left) toggles: pins where you aim, or releases.
