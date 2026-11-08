@@ -365,6 +365,42 @@ test("the sketch is placed where the controller points, not where the head looks
   assertNoErrors();
 });
 
+// Is the control panel (the 0.32 x 0.275 plane) shown?
+const panelShown = () => page.evaluate(() => {
+  let found = null;
+  window.__scene.traverse((object) => {
+    if (found || !object.isMesh) return;
+    const p = object.geometry.parameters;
+    if (p && Math.abs(p.width - 0.32) < 1e-6 && Math.abs(p.height - 0.275) < 1e-6) found = object;
+  });
+  return found.visible;
+});
+
+async function pressB() {
+  await page.evaluate(() => window.__iwer.controllers.right.updateButtonValue("b-button", 1));
+  await frames(3);
+  await page.evaluate(() => window.__iwer.controllers.right.updateButtonValue("b-button", 0));
+  await frames(5);
+}
+
+test("the menu stays visible before and after pinning", async () => {
+  await enterHeadset();
+  assert.equal(await panelShown(), true, "menu should show before pinning");
+  await pressTrigger();
+  assert.match(await hint(), /^Pinned/);
+  assert.equal(await panelShown(), true, "menu should stay visible after pinning");
+  assertNoErrors();
+});
+
+test("B hides the menu and shows it again", async () => {
+  await enterHeadset();
+  await pressB();
+  assert.equal(await panelShown(), false, "B should hide the menu");
+  await pressB();
+  assert.equal(await panelShown(), true, "B should show the menu again");
+  assertNoErrors();
+});
+
 test("A button pins and releases the sketch, so it follows the view again", async () => {
   await enterHeadset();
   await pressTrigger();

@@ -18,14 +18,17 @@ Trace a sketch onto the real world. Overlay it on your camera in the browser, or
 
 | Action | How |
 | --- | --- |
-| Pin the sketch | Point the controller at a wall or table like a laser pointer, press **A** (right) or **X** (left), or pull the trigger. No need to turn your head. |
-| Slide it sideways | Hold grip and push the thumbstick left or right |
-| Nearer or farther | Hold grip and push the thumbstick up (nearer) or down (farther) |
-| Unpin | Press **A** or **X** again (no aiming needed) |
-| Opacity, size, distance | Aim at the panel buttons, pull the trigger |
-| Move the panel (when not pinned) | Push the thumbstick. Hold grip and push up/down for nearer/farther. Or grip an empty part of the panel and move the controller |
+| Aim | Point the controller at a wall or table like a laser pointer. No need to turn your head. |
+| Pin the sketch | Press **A** (right) or **X** (left), or pull the trigger |
+| Unpin | Press **A** or **X** again |
+| Short or long aim distance (when no surface is hit) | Hold grip and push the thumbstick up (closer) or down (farther) |
+| Slide the pinned sketch sideways | Hold grip and push the thumbstick left or right |
+| Nearer or farther (pinned) | Hold grip and push the thumbstick up (nearer) or down (farther). Or use the NEARER / FARTHER buttons on the menu |
+| Move the menu | Push the thumbstick (when not pinned), or hold grip on an empty part of the menu and move the controller |
+| Menu buttons | Aim at the menu and pull the trigger: opacity, size, nearer/farther, HIDE |
+| Hide / show the menu | HIDE button on the menu, or press **B** (right) or **Y** (left) |
 
-Once pinned, the sketch only moves while you hold grip and push the thumbstick. Hands and pens are ignored, so you can put the controllers down and draw on paper without the sketch moving.
+The menu stays visible before and after pinning. Once pinned, the sketch only moves while you hold grip and push the thumbstick. Hands and pens are ignored, so you can draw on the paper without the sketch moving.
 
 ## Run it locally
 
