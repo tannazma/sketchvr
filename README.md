@@ -16,7 +16,7 @@ Trace a sketch onto the real world. Overlay it on your camera in the browser, or
 
 ## Headset controls
 
-The same guide is in the headset: press **HELP** on the right side of your view.
+The same guide is in the headset: press **HELP** in the top-left of your view.
 
 | What you want to do | What to do |
 | --- | --- |

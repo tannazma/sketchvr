@@ -699,30 +699,34 @@
             xrControlPanel.renderOrder = 20;
             camera.add(xrControlPanel);
 
-            // Guide card on the right side of the view, opened by the HELP tab (separate from the menu).
+            // Guide card: wide (opens horizontally) and large, so it reads at arm's length.
+            // Canvas 1320 x 960 px shown as 0.66 x 0.48 m, about 2000 px per metre.
             const helpCanvas = document.createElement("canvas");
-            helpCanvas.width = 420;
-            helpCanvas.height = 720;
+            helpCanvas.width = 1320;
+            helpCanvas.height = 960;
             const helpContext = helpCanvas.getContext("2d");
-            helpContext.fillStyle = "rgba(22, 22, 20, 0.94)";
-            helpContext.fillRect(0, 0, 420, 720);
+            helpContext.fillStyle = "rgba(22, 22, 20, 0.95)";
+            helpContext.fillRect(0, 0, 1320, 960);
             helpContext.textAlign = "left";
             helpContext.textBaseline = "top";
             // Each entry: a heading (h) or a line of text (t). Long lines wrap automatically.
-            const helpEntries = [
-              { h: "Place your sketch" },
-              { t: "Point the controller at the table or wall, like a laser pointer. You don't need to turn your head." },
-              { t: "Press A (right hand) or X (left hand) to lock it. Press again to unlock." },
-              { h: "Closer or farther" },
-              { t: "Before locking: hold the side button and push the stick up to move it closer, or down to move it farther." },
-              { t: "After locking: hold the side button and push up or down to move it nearer or farther." },
-              { h: "Slide it" },
-              { t: "After locking: hold the side button and push the stick left or right." },
-              { h: "The menu" },
-              { t: "Push the stick to move the menu. Or hold the side button on an empty part of it and drag." },
-              { t: "Press HIDE to hide it. To bring it back, aim at MENU and pull the trigger, or press B (right) or Y (left)." },
-              { h: "Good to know" },
-              { t: "Your hands and your pen never move the drawing." }
+            const helpColumns = [
+              [
+                { h: "Place it" },
+                { t: "Point the controller at the table or wall, like a laser pointer." },
+                { t: "Press A or X to lock it. Press again to unlock." },
+                { h: "Closer or farther" },
+                { t: "Before locking: hold the side button and push the stick up (closer) or down (farther)." },
+                { t: "After locking: hold the side button. Push up or down for nearer or farther. Push left or right to slide." }
+              ],
+              [
+                { h: "The menu" },
+                { t: "Push the stick to move it." },
+                { t: "HIDE hides it. To show it again, aim at MENU and pull the trigger, or press B or Y." },
+                { h: "Good to know" },
+                { t: "Your hands and pen never move the drawing." },
+                { t: "Press HELP again to close this guide." }
+              ]
             ];
             function wrapText(text, x, y, maxWidth, lineHeight) {
               const words = text.split(" ");
@@ -740,37 +744,39 @@
               if (line) helpContext.fillText(line, x, y);
               return y + lineHeight;
             }
-            let helpY = 16;
             helpContext.fillStyle = "#d4f36a";
-            helpContext.font = "600 24px sans-serif";
-            helpContext.fillText("How to use Sketch VR", 16, helpY);
-            helpY += 44;
-            for (const entry of helpEntries) {
-              if (entry.h) {
-                helpY += 6;
-                helpContext.fillStyle = "#d4f36a";
-                helpContext.font = "600 20px sans-serif";
-                helpContext.fillText(entry.h, 16, helpY);
-                helpY += 30;
-              } else {
-                helpContext.fillStyle = "#ffffff";
-                helpContext.font = "18px sans-serif";
-                helpY = wrapText(entry.t, 16, helpY, 388, 24);
+            helpContext.font = "600 58px sans-serif";
+            helpContext.fillText("How to use Sketch VR", 44, 30);
+            helpColumns.forEach((entries, column) => {
+              let y = 130;
+              const x = 44 + column * 640;
+              for (const entry of entries) {
+                if (entry.h) {
+                  y += 10;
+                  helpContext.fillStyle = "#d4f36a";
+                  helpContext.font = "600 46px sans-serif";
+                  helpContext.fillText(entry.h, x, y);
+                  y += 64;
+                } else {
+                  helpContext.fillStyle = "#ffffff";
+                  helpContext.font = "42px sans-serif";
+                  y = wrapText(entry.t, x, y, 600, 54) + 10;
+                }
               }
-            }
+            });
             const helpTexture = new THREE.CanvasTexture(helpCanvas);
             helpTexture.colorSpace = THREE.SRGBColorSpace;
             const helpCard = new THREE.Mesh(
-              new THREE.PlaneGeometry(0.3, 0.514),
+              new THREE.PlaneGeometry(0.66, 0.48),
               new THREE.MeshBasicMaterial({ map: helpTexture, transparent: true, depthTest: false, depthWrite: false })
             );
-            helpCard.position.set(0.3, -0.18, -0.5);
-            helpCard.renderOrder = 20;
             helpCard.name = "helpCard";
+            helpCard.position.set(0.03, -0.03, -0.6);
+            helpCard.renderOrder = 20;
             helpCard.visible = false;
             camera.add(helpCard);
 
-            // HELP tab on the right side of the view: always visible, opens and closes the guide card.
+            // HELP tab in the top-left of the view: always visible, opens and closes the guide card.
             const helpTabCanvas = document.createElement("canvas");
             helpTabCanvas.width = 256;
             helpTabCanvas.height = 96;
@@ -792,7 +798,7 @@
               new THREE.MeshBasicMaterial({ map: helpTabTexture, transparent: true, depthTest: false, depthWrite: false })
             );
             helpTab.name = "helpTab";
-            helpTab.position.set(0.3, 0.14, -0.5);
+            helpTab.position.set(-0.32, 0.25, -0.5);
             helpTab.renderOrder = 21;
             camera.add(helpTab);
 
