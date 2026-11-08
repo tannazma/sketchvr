@@ -1,10 +1,11 @@
 // Service worker: caches the app shell so the page loads offline and is installable.
 // Network-first for same-origin requests, so updates to index.html are picked up
 // when online. Cross-origin requests (e.g. the three.js CDN) are not intercepted.
-const CACHE_NAME = "sketch-vr-v3";
+const CACHE_NAME = "sketch-vr-v4";
 const APP_SHELL = [
   "./",
   "index.html",
+  "privacy.html",
   "manifest.webmanifest",
   "icons/icon-192.png",
   "icons/icon-512.png"
