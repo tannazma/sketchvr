@@ -792,6 +792,8 @@
             const hitWorldPoint = new THREE.Vector3();
             const previewOffset = new THREE.Matrix4().makeTranslation(0, 0, -1.4);
             const previewMatrix = new THREE.Matrix4();
+            const headMatrix = new THREE.Matrix4();
+            let activeAimRecord = null;
             const previousButtonStates = new Map();
             const triggerButtonIndex = 0;
             // Standard XR gamepad index 4: A on the right controller, X on the left.
@@ -804,6 +806,8 @@
             const controllerQuaternion = new THREE.Quaternion();
             const controllerDirection = new THREE.Vector3();
             const joystickMoveSpeed = 1;
+            const depthStepPerPress = 0.005;
+            const depthSpeed = 0.12;
             let previousFrameTime = null;
 
             function setControllerRay(controller) {
@@ -824,6 +828,67 @@
               ) || null;
             }
 
+            // Floating panel: it starts on your head, and stays in the room once you move it.
+            const panelPlane = new THREE.Plane();
+            const panelHitPoint = new THREE.Vector3();
+            const panelMoveSpeed = 0.5;
+            let panelDrag = null;
+            const previousGripStates = new Map();
+
+            // Moves the panel out of the head so it stays put in the room. Keeps its world position.
+            function detachPanelToRoom() {
+              if (xrControlPanel.parent !== scene) scene.attach(xrControlPanel);
+            }
+
+            // Turn the panel to face the viewer after it moves.
+            function faceViewer() {
+              xrControlPanel.lookAt(camera.getWorldPosition(new THREE.Vector3()));
+            }
+
+            // Where the controller ray meets the panel's front face, in world space.
+            function panelDragPoint() {
+              xrControlPanel.updateMatrixWorld(true);
+              const normal = new THREE.Vector3(0, 0, 1).transformDirection(xrControlPanel.matrixWorld);
+              const origin = xrControlPanel.getWorldPosition(new THREE.Vector3());
+              panelPlane.setFromNormalAndCoplanarPoint(normal, origin);
+              if (!controllerRaycaster.ray.intersectPlane(panelPlane, panelHitPoint)) return null;
+              return panelHitPoint.clone();
+            }
+
+            function startPanelDrag(record) {
+              detachPanelToRoom();
+              const hit = panelDragPoint();
+              if (!hit) return;
+              panelDrag = { record, offset: xrControlPanel.getWorldPosition(new THREE.Vector3()).sub(hit) };
+              xrPlacementHint.textContent = "Moving panel · release grip to drop it";
+            }
+
+            function updatePanelDrag() {
+              const hit = panelDragPoint();
+              if (!hit) return;
+              xrControlPanel.position.copy(hit.add(panelDrag.offset));
+              faceViewer();
+            }
+
+            // Thumbstick: left/right and up/down move the panel. With grip held, up/down moves it nearer or farther.
+            function moveFloatingPanel(movement, deltaSeconds) {
+              detachPanelToRoom();
+              camera.updateMatrixWorld(true);
+              const headPosition = camera.getWorldPosition(new THREE.Vector3());
+              const outward = xrControlPanel.getWorldPosition(new THREE.Vector3()).sub(headPosition).normalize();
+              const right = new THREE.Vector3(1, 0, 0).transformDirection(camera.matrixWorld);
+              const up = new THREE.Vector3(0, 1, 0).transformDirection(camera.matrixWorld);
+              const step = panelMoveSpeed * deltaSeconds;
+              if (movement.grip) {
+                // Stick up is negative on the gamepad, so up brings the panel nearer.
+                xrControlPanel.position.addScaledVector(outward, movement.y * step);
+              } else {
+                xrControlPanel.position.addScaledVector(right, movement.x * step);
+                xrControlPanel.position.addScaledVector(up, -movement.y * step);
+              }
+              faceViewer();
+            }
+
             function applyJoystickDeadzone(value) {
               const magnitude = Math.abs(value);
               if (magnitude <= 0.18) return 0;
@@ -841,20 +906,19 @@
             }
 
             // Quest thumbstick sits on axes[2] and axes[3] (axes[0] and axes[1] are unused).
+            // Returns the strongest stick push, and whether that controller's grip is held.
             function getJoystickInput(session) {
-              let movement = { x: 0, y: 0 };
+              let movement = { x: 0, y: 0, grip: false };
               let strongestInput = 0;
               for (const inputSource of session.inputSources) {
                 if (!isThumbstickController(inputSource)) continue;
-                // The grip must be held, so bumping the stick while the controllers are down does nothing.
-                if (!inputSource.gamepad.buttons[gripButtonIndex]?.pressed) continue;
                 const axes = inputSource.gamepad.axes;
                 const base = axes.length >= 4 ? 2 : 0;
                 const x = applyJoystickDeadzone(axes[base] ?? 0);
                 const y = applyJoystickDeadzone(axes[base + 1] ?? 0);
                 const strength = Math.hypot(x, y);
                 if (strength > strongestInput) {
-                  movement = { x, y };
+                  movement = { x, y, grip: Boolean(inputSource.gamepad.buttons[gripButtonIndex]?.pressed) };
                   strongestInput = strength;
                 }
               }
@@ -877,16 +941,11 @@
               return inside;
             }
 
-            function findSurfaceTarget(frame, referenceSpace) {
-              const viewerPose = frame.getViewerPose(referenceSpace);
-              if (!viewerPose || !frame.detectedPlanes) return null;
-
-              new THREE.Matrix4().fromArray(viewerPose.transform.matrix).decompose(
-                viewerPosition,
-                viewerQuaternion,
-                viewerScale
-              );
-              rayDirection.set(0, 0, -1).applyQuaternion(viewerQuaternion).normalize();
+            // Finds the nearest detected surface (wall, table...) along a ray from origin in direction.
+            function findSurfaceTarget(frame, referenceSpace, origin, direction) {
+              if (!frame.detectedPlanes) return null;
+              viewerPosition.copy(origin);
+              rayDirection.copy(direction).normalize();
               let nearestDistance = Infinity;
               let nearestMatrix = null;
 
@@ -936,13 +995,19 @@
               }
             }
 
-            function moveSketchDepth(direction) {
+            // Moves the sketch toward (positive) or away from (negative) the viewer, in meters.
+            function moveSketchDepthBy(meters) {
               placement.updateMatrixWorld(true);
               const cameraPosition = renderer.xr.getCamera(camera).getWorldPosition(new THREE.Vector3());
               const sketchPosition = overlay.getWorldPosition(new THREE.Vector3());
               const planeNormal = new THREE.Vector3(0, 0, 1).transformDirection(placement.matrixWorld);
               const nearDirection = planeNormal.dot(cameraPosition.sub(sketchPosition)) >= 0 ? 1 : -1;
-              overlay.position.z += direction * 0.05 * nearDirection;
+              overlay.position.z += meters * nearDirection;
+            }
+
+            // Panel buttons: one press = 1 cm.
+            function moveSketchDepth(direction) {
+              moveSketchDepthBy(direction * depthStepPerPress);
             }
 
             renderer.xr.addEventListener("sessionstart", () => {
@@ -972,7 +1037,10 @@
               drawXRControlPanel();
               reticle.visible = false;
               overlay.position.z = 0.012;
-              xrPlacementHint.textContent = "Pull the trigger or press A to pin the sketch to a wall";
+              camera.add(xrControlPanel);
+              xrControlPanel.position.set(0.2, 0.2, -0.58);
+              xrControlPanel.rotation.set(0, 0, 0);
+              xrPlacementHint.textContent = "Pull the trigger or press A to pin the sketch · push the thumbstick to move the panel";
               previousFrameTime = null;
               renderer.setAnimationLoop((time, frame) => {
                 if (frame) {
@@ -982,10 +1050,31 @@
                   previousFrameTime = time;
                   const referenceSpace = renderer.xr.getReferenceSpace();
                   const viewerPose = frame.getViewerPose(referenceSpace);
-                  const targetMatrix = findSurfaceTarget(frame, referenceSpace);
-                  if (viewerPose) {
-                    previewMatrix.fromArray(viewerPose.transform.matrix).multiply(previewOffset);
+                  // Aim like a laser pointer with a tracked controller; use the head only if none is held.
+                  // The aiming controller is the one you last moved or pressed (default: the first one held).
+                  const aimCandidates = controllerRecords.filter((record) => record.inputSource && isThumbstickController(record.inputSource));
+                  for (const candidate of aimCandidates) {
+                    if (!candidate.lastPosition) candidate.lastPosition = candidate.controller.position.clone();
+                    if (candidate.controller.position.distanceTo(candidate.lastPosition) > 0.002) activeAimRecord = candidate;
+                    candidate.lastPosition.copy(candidate.controller.position);
                   }
+                  if (!aimCandidates.includes(activeAimRecord)) activeAimRecord = aimCandidates[0] || null;
+                  const aimRecord = activeAimRecord;
+                  let aimOrigin = null;
+                  let aimDirection = null;
+                  if (aimRecord) {
+                    setControllerRay(aimRecord.controller);
+                    aimOrigin = controllerPosition.clone();
+                    aimDirection = controllerDirection.clone();
+                    previewMatrix.copy(aimRecord.controller.matrixWorld).multiply(previewOffset);
+                  } else if (viewerPose) {
+                    headMatrix.fromArray(viewerPose.transform.matrix);
+                    previewMatrix.copy(headMatrix).multiply(previewOffset);
+                    headMatrix.decompose(viewerPosition, viewerQuaternion, viewerScale);
+                    aimOrigin = viewerPosition.clone();
+                    aimDirection = new THREE.Vector3(0, 0, -1).applyQuaternion(viewerQuaternion);
+                  }
+                  const targetMatrix = aimOrigin ? findSurfaceTarget(frame, referenceSpace, aimOrigin, aimDirection) : null;
                   const session = renderer.xr.getSession();
                   for (const inputSource of session.inputSources) {
                     if (!inputSource.gamepad) continue;
@@ -1017,10 +1106,25 @@
                     const faceWasDown = previousFaceStates.get(inputSource) || false;
                     if (faceDown && !faceWasDown) togglePlacement();
                     previousFaceStates.set(inputSource, faceDown);
+
+                    // Grip on an empty part of the panel drags the panel.
+                    const gripDown = Boolean(inputSource.gamepad.buttons[gripButtonIndex]?.pressed);
+                    const gripWasDown = previousGripStates.get(inputSource) || false;
+                    if (record && xrControlPanel.visible) {
+                      if (gripDown && !gripWasDown && panelHit && !control && (!panelDrag || !panelDrag.record.inputSource)) {
+                        startPanelDrag(record);
+                      }
+                      if (panelDrag && panelDrag.record === record) {
+                        if (gripDown) updatePanelDrag();
+                        else panelDrag = null;
+                      }
+                    }
+                    previousGripStates.set(inputSource, gripDown);
+                    if (record && (pressed || faceDown || gripDown)) activeAimRecord = record;
                     previousButtonStates.set(inputSource, pressed);
                   }
 
-                  if (placementRequested && (!isFixed) && (targetMatrix || viewerPose)) {
+                  if (placementRequested && (!isFixed) && (targetMatrix || aimOrigin)) {
                     if (placementAnchor) placementAnchor.delete();
                     placementAnchor = null;
                     placement.matrix.copy(targetMatrix || previewMatrix);
@@ -1029,7 +1133,7 @@
                     hasBeenPlaced = true;
                     xrControlPanel.visible = false;
                     hoveredXRControl = null;
-                    xrPlacementHint.textContent = "Pinned · hold grip and push the thumbstick to slide it, press A to release";
+                    xrPlacementHint.textContent = "Pinned · hold grip: stick left/right slides, up/down moves nearer/farther · A releases";
                     if (typeof frame.createAnchor === "function") {
                       const position = new THREE.Vector3();
                       const orientation = new THREE.Quaternion();
@@ -1052,14 +1156,23 @@
                     if (anchorPose) placement.matrix.fromArray(anchorPose.transform.matrix);
                   } else if (!isFixed && targetMatrix) {
                     placement.matrix.copy(targetMatrix);
-                  } else if (!isFixed && viewerPose) {
-                    placement.matrix.fromArray(viewerPose.transform.matrix).multiply(previewOffset);
+                  } else if (!isFixed && aimOrigin) {
+                    placement.matrix.copy(previewMatrix);
                   }
 
                   if (isFixed) {
+                    // Grip held + stick: left/right slides, up/down moves nearer (up) or farther (down).
                     const movement = getJoystickInput(session);
-                    overlay.position.x += movement.x * joystickMoveSpeed * deltaSeconds;
-                    overlay.position.y -= movement.y * joystickMoveSpeed * deltaSeconds;
+                    if (movement.grip && (movement.x || movement.y)) {
+                      overlay.position.x += movement.x * joystickMoveSpeed * deltaSeconds;
+                      // Squared response: small pushes give fine steps, big pushes move faster.
+                      const depthInput = Math.sign(movement.y) * movement.y * movement.y;
+                      moveSketchDepthBy(-depthInput * depthSpeed * deltaSeconds);
+                    }
+                  } else {
+                    // Not pinned: the stick moves the floating panel.
+                    const movement = getJoystickInput(session);
+                    if (movement.x || movement.y) moveFloatingPanel(movement, deltaSeconds);
                   }
 
                   const hasTarget = Boolean(targetMatrix);
@@ -1086,6 +1199,8 @@
               placementRequested = false;
               previousButtonStates.clear();
               previousFaceStates.clear();
+              previousGripStates.clear();
+              panelDrag = null;
               document.body.classList.remove("xr-active");
               sketchSize.dispatchEvent(new Event("input", { bubbles: true }));
               statusText.textContent = "Camera off";

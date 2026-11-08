@@ -224,6 +224,26 @@ test("thumbstick slides a fixed sketch along the wall while grip is held", async
   assertNoErrors();
 });
 
+test("grip and thumbstick up/down moves a fixed sketch nearer and farther", async () => {
+  await enterHeadset();
+  await pressTrigger();
+  const headBefore = await page.evaluate(() => { const p = window.__iwer.position; return { x: p.x, y: p.y, z: p.z }; });
+  const before = await sketchPosition();
+  const distToHead = (p, h) => Math.hypot(p.x - h.x, p.y - h.y, p.z - h.z);
+
+  await setGrip(1);
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 0, -1));
+  await frames(30);
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 0, 0));
+  await frames(5);
+  const nearer = await sketchPosition();
+  const nearerBy = distToHead(before, headBefore) - distToHead(nearer, headBefore);
+  assert.ok(Math.abs(nearerBy) > 0.02, `stick up/down with grip should change depth (changed ${nearerBy} m)`);
+  assert.match(await hint(), /^Pinned/);
+  await setGrip(0);
+  assertNoErrors();
+});
+
 test("thumbstick without grip does not move a fixed sketch", async () => {
   await enterHeadset();
   await pressTrigger();
@@ -278,6 +298,73 @@ async function pressA() {
   await frames(5);
 }
 
+// World position of the control panel (a 0.32 x 0.275 plane attached to the camera).
+const panelWorld = () => page.evaluate(() => {
+  let found = null;
+  window.__scene.updateMatrixWorld(true);
+  window.__scene.traverse((object) => {
+    if (found || !object.isMesh) return;
+    const p = object.geometry.parameters;
+    if (p && Math.abs(p.width - 0.32) < 1e-6 && Math.abs(p.height - 0.275) < 1e-6) found = object;
+  });
+  const e = found.matrixWorld.elements;
+  return { x: e[12], y: e[13], z: e[14] };
+});
+
+test("grip on the panel drags it to a new place", async () => {
+  await enterHeadset();
+  const before = await panelWorld();
+  // Aim at the empty strip above the buttons, not at a button.
+  await aimRightControllerAt({ x: before.x, y: before.y + 0.12, z: before.z });
+  await setGrip(1);
+  await frames(3); // let the grab register before moving
+  // Move with .set(): the emulator only picks up position changes made that way.
+  await page.evaluate(([x, y, z]) => { window.__iwer.controllers.right.position.set(x, y, z); }, [before.x - 0.15, before.y + 0.12 + headHeight, before.z + 0.2]);
+  await frames(10);
+  await setGrip(0);
+  await frames(3);
+  const after = await panelWorld();
+  assert.ok(distance(before, after) > 0.05, `panel moved only ${distance(before, after)} m`);
+  assertNoErrors();
+});
+
+test("thumbstick moves the floating panel when the sketch is not pinned", async () => {
+  await enterHeadset();
+  const before = await panelWorld();
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 1, 0));
+  await frames(30);
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 0, 0));
+  await frames(3);
+  const after = await panelWorld();
+  assert.ok(distance(before, after) > 0.05, `panel moved only ${distance(before, after)} m`);
+  assertNoErrors();
+});
+
+test("a panel moved in the room stays there when the head turns", async () => {
+  await enterHeadset();
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 1, 0));
+  await frames(30);
+  await page.evaluate(() => window.__iwer.controllers.right.updateAxes("thumbstick", 0, 0));
+  await frames(3);
+  const before = await panelWorld();
+  await turnHead(60);
+  const after = await panelWorld();
+  assert.ok(distance(before, after) < 1e-4, `floating panel moved ${distance(before, after)} m when the head turned`);
+  assertNoErrors();
+});
+
+test("the sketch is placed where the controller points, not where the head looks", async () => {
+  await enterHeadset();
+  await turnHead(90);
+  // Controller ray runs straight along x = 0; the head now looks sideways, away from it.
+  await aimRightControllerAt({ x: 0, y: 0, z: -1 });
+  await pressA();
+  assert.match(await hint(), /^Pinned/, "A should pin the sketch");
+  const pinned = await sketchPosition();
+  assert.ok(Math.abs(pinned.x) < 0.05, `sketch landed ${pinned.x} m off the controller ray (expected x near 0)`);
+  assertNoErrors();
+});
+
 test("A button pins and releases the sketch, so it follows the view again", async () => {
   await enterHeadset();
   await pressTrigger();
@@ -289,9 +376,14 @@ test("A button pins and releases the sketch, so it follows the view again", asyn
   await pressA();
   assert.match(await hint(), /Wall found|No wall found|Aim/, "A should release it again");
 
+  // Released, the sketch follows the controller you aim with (not the head).
   const before = await sketchPosition();
-  await turnHead(60);
+  await page.evaluate(() => {
+    const c = window.__iwer.controllers.right;
+    c.position.set(c.position.x + 0.3, c.position.y, c.position.z);
+  });
+  await frames(5);
   const after = await sketchPosition();
-  assert.ok(distance(before, after) > 0.05, "after releasing, the sketch should move with the head");
+  assert.ok(distance(before, after) > 0.05, "after releasing, the sketch should follow the aiming controller");
   assertNoErrors();
 });
