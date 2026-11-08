@@ -699,14 +699,85 @@
             xrControlPanel.renderOrder = 20;
             camera.add(xrControlPanel);
 
+            // In-headset guide card, shown under the menu when HELP is pressed.
+            const helpCanvas = document.createElement("canvas");
+            helpCanvas.width = 420;
+            helpCanvas.height = 420;
+            const helpContext = helpCanvas.getContext("2d");
+            helpContext.fillStyle = "rgba(22, 22, 20, 0.94)";
+            helpContext.fillRect(0, 0, 420, 420);
+            helpContext.textAlign = "left";
+            helpContext.textBaseline = "top";
+            helpContext.fillStyle = "#d4f36a";
+            helpContext.font = "600 22px sans-serif";
+            helpContext.fillText("HOW TO USE", 16, 14);
+            helpContext.font = "17px sans-serif";
+            const helpLines = [
+              "1. Point the controller at a wall or table,",
+              "   like a laser pointer. No need to turn your head.",
+              "2. Press A or X (or pull the trigger) to pin.",
+              "   Press again to release.",
+              "Distance before pinning (when nothing is hit):",
+              "   Hold GRIP + stick: UP = closer, DOWN = farther.",
+              "After pinning, to place it exactly:",
+              "   Hold GRIP, push stick LEFT/RIGHT = slide.",
+              "   Hold GRIP + stick: UP/DOWN = nearer/farther.",
+              "Menu: push the stick to move it (not pinned),",
+              "   or hold GRIP on an empty part and drag it.",
+              "HIDE hides the menu. B or Y shows or hides it.",
+              "Hands and pens never move the drawing."
+            ];
+            helpLines.forEach((line, index) => {
+              helpContext.fillStyle = "#ffffff";
+              helpContext.fillText(line.trim(), line.startsWith("   ") ? 34 : 16, 56 + index * 26);
+            });
+            const helpTexture = new THREE.CanvasTexture(helpCanvas);
+            helpTexture.colorSpace = THREE.SRGBColorSpace;
+            const helpCard = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.32, 0.32),
+              new THREE.MeshBasicMaterial({ map: helpTexture, transparent: true, depthTest: false, depthWrite: false })
+            );
+            helpCard.position.set(0, -0.3175, 0.001);
+            helpCard.renderOrder = 20;
+            helpCard.visible = false;
+            xrControlPanel.add(helpCard);
+
+            // Small MENU tab, shown only while the menu is hidden: aim at it and pull the trigger.
+            const menuTabCanvas = document.createElement("canvas");
+            menuTabCanvas.width = 256;
+            menuTabCanvas.height = 96;
+            const menuTabContext = menuTabCanvas.getContext("2d");
+            menuTabContext.fillStyle = "rgba(16, 19, 17, 0.92)";
+            menuTabContext.fillRect(2, 2, 252, 92);
+            menuTabContext.strokeStyle = "#d4f36a";
+            menuTabContext.lineWidth = 4;
+            menuTabContext.strokeRect(4, 4, 248, 88);
+            menuTabContext.fillStyle = "#d4f36a";
+            menuTabContext.font = "600 44px sans-serif";
+            menuTabContext.textAlign = "center";
+            menuTabContext.textBaseline = "middle";
+            menuTabContext.fillText("MENU", 128, 48);
+            const menuTabTexture = new THREE.CanvasTexture(menuTabCanvas);
+            menuTabTexture.colorSpace = THREE.SRGBColorSpace;
+            const menuTab = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.12, 0.045),
+              new THREE.MeshBasicMaterial({ map: menuTabTexture, transparent: true, depthTest: false, depthWrite: false })
+            );
+            menuTab.position.set(0.2, -0.22, -0.5);
+            menuTab.renderOrder = 21;
+            menuTab.visible = false;
+            camera.add(menuTab);
+
+            // Layout (420 x 360 px): three sections of 120 px. Each has a label band, then two buttons.
             const xrControlTargets = [
-              { id: "opacity-down", x: 12, y: 48, width: 170, height: 78, label: "−" },
-              { id: "opacity-up", x: 238, y: 48, width: 170, height: 78, label: "+" },
-              { id: "size-down", x: 12, y: 154, width: 170, height: 78, label: "−" },
-              { id: "size-up", x: 238, y: 154, width: 170, height: 78, label: "+" },
-              { id: "depth-near", x: 12, y: 278, width: 190, height: 78, label: "NEARER" },
-              { id: "depth-far", x: 218, y: 278, width: 190, height: 78, label: "FARTHER" },
-              { id: "hide", x: 322, y: 6, width: 92, height: 36, label: "HIDE" }
+              { id: "opacity-down", x: 12, y: 44, width: 188, height: 72, label: "−" },
+              { id: "opacity-up", x: 220, y: 44, width: 188, height: 72, label: "+" },
+              { id: "size-down", x: 12, y: 164, width: 188, height: 72, label: "−" },
+              { id: "size-up", x: 220, y: 164, width: 188, height: 72, label: "+" },
+              { id: "depth-near", x: 12, y: 284, width: 188, height: 72, label: "NEARER" },
+              { id: "depth-far", x: 220, y: 284, width: 188, height: 72, label: "FARTHER" },
+              { id: "help", x: 12, y: 6, width: 96, height: 32, label: "HELP" },
+              { id: "hide", x: 312, y: 6, width: 96, height: 32, label: "HIDE" }
             ];
             let hoveredXRControl = null;
 
@@ -719,9 +790,9 @@
               const opacity = document.querySelector("#sketchOpacity").value;
               const size = document.querySelector("#sketchSize").value;
               xrControlContext.fillStyle = "#ffffff";
-              xrControlContext.font = "600 26px sans-serif";
-              xrControlContext.fillText(`OPACITY ${opacity}%`, 210, 26);
-              xrControlContext.fillText(`SIZE ${size}%`, 210, 140);
+              xrControlContext.font = "600 22px sans-serif";
+              xrControlContext.fillText(`OPACITY ${opacity}%`, 210, 18);
+              xrControlContext.fillText(`SIZE ${size}%`, 210, 138);
               xrControlContext.fillText("DISTANCE", 210, 258);
 
               for (const target of xrControlTargets) {
@@ -732,7 +803,9 @@
                 xrControlContext.fillStyle = active ? "#d4f36a" : "#ffffff";
                 xrControlContext.font = target.id.endsWith("-down") || target.id.endsWith("-up")
                   ? "600 56px sans-serif"
-                  : "600 24px sans-serif";
+                  : target.id === "help" || target.id === "hide"
+                    ? "600 18px sans-serif"
+                    : "600 22px sans-serif";
                 xrControlContext.fillText(target.label, target.x + target.width / 2, target.y + target.height / 2);
               }
               xrControlTexture.needsUpdate = true;
@@ -741,6 +814,8 @@
             function setPanelHidden(hidden) {
               panelHidden = hidden;
               xrControlPanel.visible = !hidden;
+              menuTab.visible = hidden;
+              if (hidden) helpCard.visible = false;
               hoveredXRControl = null;
               if (hidden) panelDrag = null;
             }
@@ -748,6 +823,10 @@
             function activateXRControl(id) {
               if (id === "hide") {
                 setPanelHidden(true);
+                return;
+              }
+              if (id === "help") {
+                helpCard.visible = !helpCard.visible;
                 return;
               }
               if (id.startsWith("depth-")) {
@@ -1095,11 +1174,15 @@
                     const wasPressed = previousButtonStates.get(inputSource) || false;
                     let control = null;
                     let panelHit = null;
+                    let tabHit = null;
                     if (record) {
                       setControllerRay(record.controller);
                       if (xrControlPanel.visible) {
                         panelHit = controllerRaycaster.intersectObject(xrControlPanel, false)[0] || null;
                         control = findXRControl(panelHit);
+                      }
+                      if (menuTab.visible) {
+                        tabHit = controllerRaycaster.intersectObject(menuTab, false)[0] || null;
                       }
                       const nextHovered = control?.id || null;
                       if (nextHovered !== hoveredXRControl) {
@@ -1111,6 +1194,7 @@
 
                     if (pressed && !wasPressed && record) {
                       if (control) activateXRControl(control.id);
+                      else if (tabHit) setPanelHidden(false);
                       else if (!isFixed && !panelHit) togglePlacement();
                     }
                     // A (right) or X (left) toggles: pins where you aim, or releases.

@@ -401,6 +401,30 @@ test("B hides the menu and shows it again", async () => {
   assertNoErrors();
 });
 
+// World position of the MENU tab (a 0.12 x 0.045 plane attached to the camera).
+const tabWorld = () => page.evaluate(() => {
+  let found = null;
+  window.__scene.updateMatrixWorld(true);
+  window.__scene.traverse((object) => {
+    if (found || !object.isMesh) return;
+    const p = object.geometry.parameters;
+    if (p && Math.abs(p.width - 0.12) < 1e-6 && Math.abs(p.height - 0.045) < 1e-6) found = object;
+  });
+  const e = found.matrixWorld.elements;
+  return { x: e[12], y: e[13], z: e[14] };
+});
+
+test("the MENU tab shows the hidden menu again, without pinning the sketch", async () => {
+  await enterHeadset();
+  await pressB();
+  assert.equal(await panelShown(), false, "precondition: menu hidden");
+  await aimRightControllerAt(await tabWorld());
+  await pressTrigger();
+  assert.equal(await panelShown(), true, "pulling the trigger on the MENU tab should show the menu");
+  assert.doesNotMatch(await hint(), /^Pinned/, "the tab press must not pin the sketch");
+  assertNoErrors();
+});
+
 test("A button pins and releases the sketch, so it follows the view again", async () => {
   await enterHeadset();
   await pressTrigger();
