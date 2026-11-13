@@ -1,3 +1,5 @@
 *.pem
 *.pem
 node_modules/
+store-assets/video/
+store-assets/raw/
