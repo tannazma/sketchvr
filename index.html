@@ -661,9 +661,15 @@
             scene.add(placement);
 
             const sketch = document.querySelector(".sketch-overlay");
+            const openedAsApp = window.matchMedia("(display-mode: standalone)").matches;
             if (!sketch.getAttribute("src")) {
-              bottomNote.textContent = "Choose a sketch to enable headset mode";
-              await new Promise((resolve) => document.addEventListener("sketchimagechange", resolve, { once: true }));
+              if (openedAsApp) {
+                // Opened as an installed app: start with the built-in sketch so something shows straight away.
+                sketch.src = "icons/icon-512.png";
+              } else {
+                bottomNote.textContent = "Choose a sketch to enable headset mode";
+                await new Promise((resolve) => document.addEventListener("sketchimagechange", resolve, { once: true }));
+              }
             }
             await sketch.decode();
             const texture = new THREE.Texture(sketch);
@@ -1372,26 +1378,29 @@
             });
 
             xrButton.hidden = false;
-            async function startXRSession() {
+            async function startXRSession(options = {}) {
               if (xrButton.disabled) return;
               xrButton.disabled = true;
               errorMessage.textContent = "";
               let session = null;
               try {
                 session = await navigator.xr.requestSession(xrSessionMode, {
-                  // TEST: plane-detection and anchors removed to find the headset crash. Restore after testing.
-                  optionalFeatures: ["local-floor"]
+                  optionalFeatures: ["plane-detection", "local-floor", "anchors"]
                 });
                 await renderer.xr.setSession(session);
               } catch (error) {
                 if (session) await session.end();
-                errorMessage.textContent = `WebXR startup failed (${error.name}): ${error.message || "Unknown error"}`;
+                // An automatic start may be refused by the browser; then the button stays for the user to press.
+                if (!options.silent) errorMessage.textContent = `WebXR startup failed (${error.name}): ${error.message || "Unknown error"}`;
               } finally {
                 xrButton.disabled = false;
               }
             }
 
-            xrButton.addEventListener("click", startXRSession);
+            xrButton.addEventListener("click", () => startXRSession());
+
+            // Opened as an installed (immersive) app: try to enter VR straight away.
+            if (openedAsApp) startXRSession({ silent: true });
 
           }
         } catch (error) {
