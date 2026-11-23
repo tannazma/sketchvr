@@ -1379,7 +1379,8 @@
               let session = null;
               try {
                 session = await navigator.xr.requestSession(xrSessionMode, {
-                  optionalFeatures: ["plane-detection", "local-floor", "anchors"]
+                  // TEST: plane-detection and anchors removed to find the headset crash. Restore after testing.
+                  optionalFeatures: ["local-floor"]
                 });
                 await renderer.xr.setSession(session);
               } catch (error) {
