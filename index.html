@@ -605,14 +605,23 @@
       const xrPlacementHint = document.querySelector("#xrPlacementHint");
       const sketchControls = document.querySelector("#sketchControls");
 
+      // Status messages in the browser console (chrome://inspect for the headset). In the installed
+      // app the 2D page is invisible, so these are the only way to see what the app is doing.
+      const log = (...parts) => console.info("SketchVR:", ...parts);
+      const warn = (...parts) => console.warn("SketchVR:", ...parts);
+      log(`page loaded ${window.matchMedia("(display-mode: standalone)").matches ? "as installed app" : "in a browser"}`);
+
       if (!window.isSecureContext) {
+        warn("not a secure (https) page, headset mode unavailable");
         errorMessage.textContent = "Headset mode needs a secure (https) page. Open the Sketch VR link to use it.";
       } else if (!navigator.xr) {
+        warn("no WebXR in this browser, headset mode unavailable");
         errorMessage.textContent = "Headset mode isn't available in this browser. Open the page in the Meta Quest Browser, or turn on the Immersive Web Emulator to test.";
       } else {
         try {
           const arSupported = await navigator.xr.isSessionSupported("immersive-ar");
           const vrSupported = await navigator.xr.isSessionSupported("immersive-vr");
+          log(`WebXR support: immersive-ar ${arSupported}, immersive-vr ${vrSupported}`);
           if (!arSupported && !vrSupported) {
             errorMessage.textContent = "Headset mode isn't available here. Use the Meta Quest Browser, or turn on the Immersive Web Emulator to test.";
           } else {
@@ -620,6 +629,7 @@
             xrButton.textContent = arSupported ? "Enter headset AR" : "Test in VR emulator";
             // three.js is served from this site (see THIRD_PARTY_LICENSES.txt), not a CDN.
             const THREE = await import("./vendor/three/three.module.js");
+            log("three.js loaded");
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.xr.enabled = true;
             renderer.xr.setReferenceSpaceType("local");
@@ -1378,22 +1388,29 @@
               bottomNote.textContent = "Waiting for camera";
             });
 
+            renderer.xr.addEventListener("sessionstart", () => log("VR session started"));
+            renderer.xr.addEventListener("sessionend", () => log("VR session ended"));
+
             xrButton.hidden = false;
             async function startXRSession(options = {}) {
               if (xrButton.disabled) return;
               xrButton.disabled = true;
               errorMessage.textContent = "";
               let session = null;
+              // A start can wait on a permission prompt (spatial data) or on the headset being worn.
+              const stillWaiting = setTimeout(() => warn("VR start still waiting after 10 s (permission prompt, or headset not worn?)"), 10000);
               try {
                 session = await navigator.xr.requestSession(xrSessionMode, {
                   optionalFeatures: ["plane-detection", "local-floor", "anchors"]
                 });
                 await renderer.xr.setSession(session);
               } catch (error) {
+                warn(`VR start failed (${error.name}): ${error.message || "Unknown error"}`);
                 if (session) await session.end();
                 // An automatic start may be refused by the browser; then the button stays for the user to press.
                 if (!options.silent) errorMessage.textContent = `WebXR startup failed (${error.name}): ${error.message || "Unknown error"}`;
               } finally {
+                clearTimeout(stillWaiting);
                 xrButton.disabled = false;
               }
             }
@@ -1401,10 +1418,14 @@
             xrButton.addEventListener("click", () => startXRSession());
 
             // Opened as an installed (immersive) app: try to enter VR straight away.
-            if (openedAsApp) startXRSession({ silent: true });
+            if (openedAsApp) {
+              log("starting VR (app opened)");
+              startXRSession({ silent: true });
+            }
 
           }
         } catch (error) {
+          warn(`headset support didn't load: ${error?.name}: ${error?.message}`);
           errorMessage.textContent = "Headset support didn't load. Check your connection and reload the page. The camera view still works.";
         }
       }
