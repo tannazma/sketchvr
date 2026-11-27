@@ -618,7 +618,8 @@
           } else {
             const xrSessionMode = arSupported ? "immersive-ar" : "immersive-vr";
             xrButton.textContent = arSupported ? "Enter headset AR" : "Test in VR emulator";
-            const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js");
+            // three.js is served from this site (see THIRD_PARTY_LICENSES.txt), not a CDN.
+            const THREE = await import("./vendor/three/three.module.js");
             const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
             renderer.xr.enabled = true;
             renderer.xr.setReferenceSpaceType("local");

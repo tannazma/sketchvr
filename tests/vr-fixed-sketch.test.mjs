@@ -10,8 +10,8 @@
 //   - pressing A (right) or X (left) toggles it: pin, then release so it follows the view again.
 //
 // Requires: npm install, and Google Chrome installed (or set CHROME_CHANNEL="" and
-// CHROME_PATH to a Chromium binary). Three.js is loaded from the CDN, so the
-// machine needs internet access.
+// CHROME_PATH to a Chromium binary). Three.js is served from vendor/three/, so no
+// internet access is needed.
 
 import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";

@@ -1,14 +1,17 @@
 // Service worker: caches the app shell so the page loads offline and is installable.
 // Network-first for same-origin requests, so updates to index.html are picked up
-// when online. Cross-origin requests (e.g. the three.js CDN) are not intercepted.
-const CACHE_NAME = "sketch-vr-v4";
+// when online. Cross-origin requests are not intercepted. three.js is served from
+// this site (vendor/three/), so it is cached too and the app doesn't depend on a CDN.
+const CACHE_NAME = "sketch-vr-v5";
 const APP_SHELL = [
   "./",
   "index.html",
   "privacy.html",
   "manifest.webmanifest",
   "icons/icon-192.png",
-  "icons/icon-512.png"
+  "icons/icon-512.png",
+  "vendor/three/three.module.js",
+  "vendor/three/three.core.js"
 ];
 
 self.addEventListener("install", (event) => {
