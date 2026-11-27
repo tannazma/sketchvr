@@ -3,9 +3,10 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
-const root = "/Users/tann/sketchvr";
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "store-assets");
 const iwerSource = fs.readFileSync(path.join(root, "node_modules/iwer/build/iwer.min.js"), "utf8");
 const sketchImage = path.join(root, "icons/icon-512.png");

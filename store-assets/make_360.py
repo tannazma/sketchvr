@@ -21,6 +21,6 @@ for row in range(H):
     draw.line([(0, row), (W, row)], fill=c)
 draw.line([(0, H // 2), (W, H // 2)], fill=HORIZON, width=3)
 
-out = "/Users/tann/sketchvr/store-assets/preview-360-6000x3000.jpg"
+out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "preview-360-6000x3000.jpg")
 img.save(out, quality=88, optimize=True)
 print("saved", round(os.path.getsize(out) / 1e6, 2), "MB")

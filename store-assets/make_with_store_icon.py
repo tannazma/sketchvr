@@ -1,9 +1,12 @@
-# Rebuilds the store images using the store icon from sketchvr-android (store_icon.png).
+# Rebuilds the store images using the store icon from sketchvr-meta (store_icon.png).
 from PIL import Image, ImageDraw, ImageFont
 import math
+import os
 
-ICON = "/Users/tann/sketchvr-android/store_icon.png"
-OUT = "/Users/tann/sketchvr/store-assets"
+# Paths are relative to this script: sketchvr/store-assets/ inside the-sketch-vr-monorepo.
+HERE = os.path.dirname(os.path.abspath(__file__))
+ICON = os.path.join(HERE, "..", "..", "sketchvr-meta", "store_icon.png")
+OUT = HERE
 BG = (245, 244, 239)            # app light background, used on the cover and hero
 FONT = "/System/Library/Fonts/Avenir Next.ttc"
 SS = 4
