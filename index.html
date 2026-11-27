@@ -1392,8 +1392,9 @@
             renderer.xr.addEventListener("sessionend", () => log("VR session ended"));
 
             xrButton.hidden = false;
+            // Returns true when the session started.
             async function startXRSession(options = {}) {
-              if (xrButton.disabled) return;
+              if (xrButton.disabled) return false;
               xrButton.disabled = true;
               errorMessage.textContent = "";
               let session = null;
@@ -1404,11 +1405,13 @@
                   optionalFeatures: ["plane-detection", "local-floor", "anchors"]
                 });
                 await renderer.xr.setSession(session);
+                return true;
               } catch (error) {
                 warn(`VR start failed (${error.name}): ${error.message || "Unknown error"}`);
                 if (session) await session.end();
                 // An automatic start may be refused by the browser; then the button stays for the user to press.
                 if (!options.silent) errorMessage.textContent = `WebXR startup failed (${error.name}): ${error.message || "Unknown error"}`;
+                return false;
               } finally {
                 clearTimeout(stillWaiting);
                 xrButton.disabled = false;
@@ -1417,10 +1420,39 @@
 
             xrButton.addEventListener("click", () => startXRSession());
 
-            // Opened as an installed (immersive) app: try to enter VR straight away.
+            // Opened as an installed (immersive) app: there is no visible 2D page, so the app must
+            // always be in VR. Start straight away, and get back into VR if a session ends or the
+            // app is shown again without one. A refused start is retried after 1, 2, 4 ... 30 s.
+            // Never while the page is hidden (headset asleep or app in the background).
             if (openedAsApp) {
-              log("starting VR (app opened)");
-              startXRSession({ silent: true });
+              let autoStartTimer = null;
+              let failedAutoStarts = 0;
+              const scheduleAutoStart = (reason, delayMs) => {
+                clearTimeout(autoStartTimer);
+                autoStartTimer = setTimeout(() => autoStartVR(reason), delayMs);
+              };
+              const autoStartVR = async (reason) => {
+                autoStartTimer = null;
+                if (renderer.xr.isPresenting || xrButton.disabled) return;
+                if (document.visibilityState !== "visible") {
+                  log(`not starting VR (${reason}): page hidden, will start when visible`);
+                  return;
+                }
+                log(`starting VR (${reason}, attempt ${failedAutoStarts + 1})`);
+                if (await startXRSession({ silent: true })) {
+                  failedAutoStarts = 0;
+                  return;
+                }
+                failedAutoStarts += 1;
+                const retryMs = Math.min(1000 * 2 ** (failedAutoStarts - 1), 30000);
+                log(`retrying VR start in ${retryMs / 1000} s`);
+                scheduleAutoStart("retry", retryMs);
+              };
+              renderer.xr.addEventListener("sessionend", () => scheduleAutoStart("session ended", 1000));
+              document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "visible" && !renderer.xr.isPresenting) scheduleAutoStart("app visible again", 500);
+              });
+              autoStartVR("app opened");
             }
 
           }
